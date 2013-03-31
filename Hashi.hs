@@ -79,11 +79,14 @@ stateFromProblem p = Map.fromList $ map f islands
           left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
 
+
+-- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
+-- bridge to the right from 'i1' would cross the bridge to the bottom from 'i2'
 blockingPairs :: State -> [(Index, Index)]
 blockingPairs s = map xtract $ filter xing pairs
     where pairs = [(a1, a2) | a1 <- Map.assocs s, a2 <- Map.assocs s]
           xtract ((i1, _), (i2, _)) = (i1, i2)
           xing (((r1, c1), s1), ((r2, c2), s2)) = case (rightNeighbor s1, bottomNeighbor s2) of
-                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < r2 && r2 < c1'
+                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
                    otherwise                      -> False
 
