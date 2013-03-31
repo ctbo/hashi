@@ -57,11 +57,28 @@ sampleProblem = unlines
     , "..2.5.3"
     ]
 
+data Bridges = Bridges { topB :: Int
+                       , rightB :: Int
+                       , bottmB :: Int
+                       , leftB :: Int
+                       } deriving (Eq, Show)
+
+allBridges :: [Bridges]
+allBridges = [Bridges t r b l | t <- [0 .. 2]
+                              , r <- [0 .. 2]
+                              , b <- [0 .. 2]
+                              , l <- [0 .. 2]]
+
+nBridges :: Int -> [Bridges]
+nBridges n = filter f allBridges
+    where f (Bridges t r b l) = t+r+b+l == n
+
 data IslandState = IslandState { iConstraint :: Int
                                , topNeighbor :: Maybe Index
                                , rightNeighbor :: Maybe Index
                                , bottomNeighbor :: Maybe Index
                                , leftNeighbor :: Maybe Index
+                               , bridges :: [Bridges]
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
 
@@ -69,15 +86,20 @@ type State = Map.Map Index IslandState
 (a, b) .+ (c, d) = (a+c, b+d)
 
 stateFromProblem :: Problem -> State
-stateFromProblem p = Map.fromList $ map f islands
+stateFromProblem p = Map.fromList $ map (g.f) islands
     where ((0, 0), (rn, cn)) = bounds p
           islands = [e | e@(_, Island _) <- assocs p]
-          f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i))
+          f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i) (nBridges n))
           top    (r, c) = find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (r, c) = find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
           bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
           left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
+          g (i, isl) = (i, isl {bridges = filter h (bridges isl)})
+              where h (Bridges t r b l) =  (topNeighbor isl /= Nothing || t == 0)
+                                        && (rightNeighbor isl /= Nothing || r == 0)
+                                        && (bottomNeighbor isl /= Nothing || b == 0)
+                                        && (leftNeighbor isl /= Nothing || l == 0)
 
 
 -- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
