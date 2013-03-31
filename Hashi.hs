@@ -2,6 +2,7 @@ import Data.Array.IArray
 import Control.Monad
 import Control.Monad.Instances()
 import Data.List (find)
+import qualified Data.Map as Map
 
 data Field = Water | Island Int deriving (Eq)
 instance Show Field where
@@ -62,13 +63,13 @@ data IslandState = IslandState { iConstraint :: Int
                                , bottomNeighbor :: Maybe Index
                                , leftNeighbor :: Maybe Index
                                } deriving (Eq, Show)
-type State = Array Index IslandState
+type State = Map.Map Index IslandState
 
 (.+) :: (Int, Int) -> (Int, Int) -> (Int, Int)
 (a, b) .+ (c, d) = (a+c, b+d)
 
 problemToState :: Problem -> State
-problemToState p = array ((0, 0), (rn, cn)) $ map f islands
+problemToState p = Map.fromList $ map f islands
     where ((0, 0), (rn, cn)) = bounds p
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i))
@@ -80,7 +81,7 @@ problemToState p = array ((0, 0), (rn, cn)) $ map f islands
 
 blockingPairs :: State -> [(Index, Index)]
 blockingPairs s = map xtract $ filter xing pairs
-    where pairs = [(a1, a2) | a1 <- assocs s, a2 <- assocs s]
+    where pairs = [(a1, a2) | a1 <- Map.assocs s, a2 <- Map.assocs s]
           xtract ((i1, _), (i2, _)) = (i1, i2)
           xing (((r1, c1), s1), ((r2, c2), s2)) = case (rightNeighbor s1, bottomNeighbor s2) of
                    (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < r2 && r2 < c1'
