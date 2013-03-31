@@ -77,3 +77,12 @@ problemToState p = array ((0, 0), (rn, cn)) $ map f islands
           bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
           left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
+
+blockingPairs :: State -> [(Index, Index)]
+blockingPairs s = map xtract $ filter xing pairs
+    where pairs = [(a1, a2) | a1 <- assocs s, a2 <- assocs s]
+          xtract ((i1, _), (i2, _)) = (i1, i2)
+          xing (((r1, c1), s1), ((r2, c2), s2)) = case (rightNeighbor s1, bottomNeighbor s2) of
+                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < r2 && r2 < c1'
+                   otherwise                      -> False
+
