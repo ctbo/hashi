@@ -56,23 +56,22 @@ sampleProblem = unlines
     , "..2.5.3"
     ]
 
-data IslandState = IslandState { iIndex :: Index
-                               , iConstraint :: Int
+data IslandState = IslandState { iConstraint :: Int
                                , topNeighbor :: Maybe Index
                                , rightNeighbor :: Maybe Index
                                , bottomNeighbor :: Maybe Index
                                , leftNeighbor :: Maybe Index
                                } deriving (Eq, Show)
-type State = [IslandState]
+type State = Array Index IslandState
 
 (.+) :: (Int, Int) -> (Int, Int) -> (Int, Int)
 (a, b) .+ (c, d) = (a+c, b+d)
 
 problemToState :: Problem -> State
-problemToState p = map f islands
+problemToState p = array ((0, 0), (rn, cn)) $ map f islands
     where ((0, 0), (rn, cn)) = bounds p
           islands = [e | e@(_, Island _) <- assocs p]
-          f (i, Island n) = IslandState i n (top i) (right i) (bottom i) (left i)
+          f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i))
           top    (r, c) = find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (r, c) = find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
           bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
