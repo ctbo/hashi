@@ -68,8 +68,8 @@ type State = Map.Map Index IslandState
 (.+) :: (Int, Int) -> (Int, Int) -> (Int, Int)
 (a, b) .+ (c, d) = (a+c, b+d)
 
-problemToState :: Problem -> State
-problemToState p = Map.fromList $ map f islands
+stateFromProblem :: Problem -> State
+stateFromProblem p = Map.fromList $ map f islands
     where ((0, 0), (rn, cn)) = bounds p
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i))
