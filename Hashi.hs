@@ -210,3 +210,20 @@ showStateEPS state = concatMap bridges (Map.assocs state)
                                        else ""
                                 otherwise -> ""
 
+solve :: Problem -> [State]
+solve p = concatMap solve' $ narrowAll $ stateFromProblem p
+
+solve' :: State -> [State]
+solve' state = case (connectedComponents state, find uncertain $ Map.assocs state) of
+               ([_], Nothing) -> [state]
+               (_,   Nothing) -> []
+               ([_], Just a)  -> solve'' state a
+               (cs,  Just a)  -> if all unfinished cs 
+                                 then solve'' state a
+                                 else []
+    where uncertain (_, island) = length (iBridges island) > 1
+          unfinished = (any (\i -> length (iBridges (state Map.! i)) > 1)) . Set.elems
+
+solve'' :: State -> (Index, IslandState) -> [State]
+solve'' state (i, island) = concatMap f $ iBridges island
+    where f b = [Map.insert i (island {iBridges = [b]}) state] >>= narrow (Set.singleton i) >>= solve'
