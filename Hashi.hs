@@ -152,3 +152,7 @@ narrow seed state = if Set.null seed then [state] else result
           match thisB neighbor otherB b = case neighbor island of
                 Nothing -> True
                 Just i' -> thisB b `elem` (map otherB $ bridges $ state Map.! i')
+
+counts :: State -> [Int]
+counts = (map (length.bridges)) . Map.elems
+
