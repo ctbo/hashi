@@ -1,7 +1,7 @@
 import Data.Array.IArray
 import Control.Monad
 import Control.Monad.Instances()
-import Data.List (find)
+import Data.List (find, nub)
 import Data.Maybe (maybeToList)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -192,4 +192,20 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
                                                                    , (leftB, leftNeighbor)]
                         f (fB, _) = not $ 0 `elem` (map fB (iBridges island))
                         seed'' = (Set.union seed''' conn) Set.\\ head cs
-                        
+
+
+showStateEPS state = concatMap bridges (Map.assocs state)
+                   ++ concatMap circle (Map.assocs state)
+    where circle ((r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
+          bridges ((r, c), island) = right ++ down
+              where right = g rightB rightNeighbor
+                    down = g bottomB bottomNeighbor
+                    g fB fN = case nub $ map fB $ iBridges island of
+                                [n] -> if n>0
+                                       then let (r', c') = head (fN island)
+                                            in show r ++ " " ++ show c ++ " " 
+                                               ++ show r' ++ " " ++ show c' ++ " "
+                                               ++ show n ++ " bridge\n"
+                                       else ""
+                                otherwise -> ""
+
