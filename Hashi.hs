@@ -173,3 +173,23 @@ narrowAll s = narrow (Set.fromList (Map.keys s)) s
 counts :: State -> [Int]
 counts = (map (length.iBridges)) . Map.elems
 
+connectedComponents :: State -> [Set.Set Index]
+connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
+    where cc cs seed unvisited = 
+             if Set.null seed
+             then if Set.null unvisited
+                  then cs
+                  else let (seed', unvisited') = Set.deleteFindMin unvisited
+                       in cc (Set.empty : cs) (Set.singleton seed') unvisited'
+             else cc (Set.insert v (head cs) : tail cs) seed'' unvisited''
+                  where (v, seed''') = Set.deleteFindMin seed
+                        unvisited'' = Set.delete v unvisited
+                        island = state Map.! v
+                        conn = Set.fromList $ concatMap (($island).snd) 
+                                                        $ filter f [(topB, topNeighbor)
+                                                                   , (rightB, rightNeighbor)
+                                                                   , (bottomB, bottomNeighbor)
+                                                                   , (leftB, leftNeighbor)]
+                        f (fB, _) = not $ 0 `elem` (map fB (iBridges island))
+                        seed'' = (Set.union seed''' conn) Set.\\ head cs
+                        
