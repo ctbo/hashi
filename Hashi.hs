@@ -97,7 +97,7 @@ data IslandState = IslandState { iConstraint :: Int
                                , rightNeighbor :: Maybe Index
                                , bottomNeighbor :: Maybe Index
                                , leftNeighbor :: Maybe Index
-                               , bridges :: [Bridges]
+                               , iBridges :: [Bridges]
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
 
@@ -105,20 +105,22 @@ type State = Map.Map Index IslandState
 (a, b) .+ (c, d) = (a+c, b+d)
 
 stateFromProblem :: Problem -> State
-stateFromProblem p = Map.fromList $ map (g.f) islands
+stateFromProblem p = state
     where ((0, 0), (rn, cn)) = bounds p
+          state = Map.fromList $ map f islands
           islands = [e | e@(_, Island _) <- assocs p]
-          f (i, Island n) = (i, IslandState n (top i) (right i) (bottom i) (left i) (nBridges n))
+          f (i, Island n) = (i, newisland)
+              where newisland = IslandState n (top i) (right i) (bottom i) (left i) bridges
+                    bridges = filter h $ nBridges n
+                    h (Bridges t r b l) =  (topNeighbor newisland /= Nothing || t == 0)
+                                        && (rightNeighbor newisland /= Nothing || r == 0)
+                                        && (bottomNeighbor newisland /= Nothing || b == 0)
+                                        && (leftNeighbor newisland /= Nothing || l == 0)
           top    (r, c) = find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (r, c) = find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
           bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
           left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
-          g (i, isl) = (i, isl {bridges = filter h (bridges isl)})
-              where h (Bridges t r b l) =  (topNeighbor isl /= Nothing || t == 0)
-                                        && (rightNeighbor isl /= Nothing || r == 0)
-                                        && (bottomNeighbor isl /= Nothing || b == 0)
-                                        && (leftNeighbor isl /= Nothing || l == 0)
 
 
 -- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
@@ -135,7 +137,7 @@ narrow :: Set.Set Index -> State -> [State]
 narrow seed state = if Set.null seed then [state] else result
     where (i, seed') = Set.deleteFindMin seed
           island = state Map.! i
-          bs = bridges island
+          bs = iBridges island
           bs' = filter (match topB topNeighbor bottomB)
               $ filter (match rightB rightNeighbor leftB)
               $ filter (match bottomB bottomNeighbor topB)
@@ -148,11 +150,11 @@ narrow seed state = if Set.null seed then [state] else result
                                                                      [topNeighbor, rightNeighbor
                                                                      , bottomNeighbor, leftNeighbor]
                              in narrow (Set.union seed' newSeeds)
-                                       (Map.insert i (island {bridges = bs'}) state)
+                                       (Map.insert i (island {iBridges = bs'}) state)
           match thisB neighbor otherB b = case neighbor island of
                 Nothing -> True
-                Just i' -> thisB b `elem` (map otherB $ bridges $ state Map.! i')
+                Just i' -> thisB b `elem` (map otherB $ iBridges $ state Map.! i')
 
 counts :: State -> [Int]
-counts = (map (length.bridges)) . Map.elems
+counts = (map (length.iBridges)) . Map.elems
 
