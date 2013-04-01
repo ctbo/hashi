@@ -59,6 +59,23 @@ sampleProblem = unlines
     , "..2.5.3"
     ]
 
+sampleProblemHard :: String
+sampleProblemHard = unlines
+    ["2.2...3.3"
+    ,".2..3..3."
+    ,"3....1..3"
+    ,".3.2...2."
+    ,"4.3.2...3"
+    ,".3.2.3.3."
+    ,"3.....2.4"
+    ,".3..3..1."
+    ,"3.2...4.5"
+    ,".2...5.2."
+    ,"3.3.2.3.2"
+    ,".2...3..."
+    ,"3..3..6.2"
+    ]
+
 data Bridges = Bridges { topB :: Int
                        , rightB :: Int
                        , bottomB :: Int
