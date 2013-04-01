@@ -145,7 +145,9 @@ narrow seed state = if Set.null seed then [state] else result
     where (i, seed') = Set.deleteFindMin seed
           island = state Map.! i
           bs = iBridges island
-          bs' = filter (match topB topNeighbor bottomB)
+          bs' = filter (noxings rightB rightXings bottomB)
+              $ filter (noxings bottomB bottomXings rightB)
+              $ filter (match topB topNeighbor bottomB)
               $ filter (match rightB rightNeighbor leftB)
               $ filter (match bottomB bottomNeighbor topB)
               $ filter (match leftB leftNeighbor rightB) bs
@@ -155,12 +157,15 @@ narrow seed state = if Set.null seed then [state] else result
                         then narrow seed' state
                         else let newSeeds = Set.fromList $ concatMap ($island) 
                                                                      [topNeighbor, rightNeighbor
-                                                                     , bottomNeighbor, leftNeighbor]
+                                                                     , bottomNeighbor, leftNeighbor
+                                                                     , rightXings, bottomXings]
                              in narrow (Set.union seed' newSeeds)
                                        (Map.insert i (island {iBridges = bs'}) state)
           match thisB neighbor otherB b = case neighbor island of
                 []   -> True
                 [i'] -> thisB b `elem` (map otherB $ iBridges $ state Map.! i')
+          noxings thisB others otherB b = thisB b == 0
+                || all (\o -> 0 `elem` map otherB (iBridges (state Map.! o))) (others island)
 
 counts :: State -> [Int]
 counts = (map (length.iBridges)) . Map.elems
