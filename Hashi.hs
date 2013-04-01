@@ -194,6 +194,7 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
                         seed'' = (Set.union seed''' conn) Set.\\ head cs
 
 
+showStateEPS :: State -> String
 showStateEPS state = concatMap bridges (Map.assocs state)
                    ++ concatMap circle (Map.assocs state)
     where circle ((r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
