@@ -167,6 +167,9 @@ narrow seed state = if Set.null seed then [state] else result
           noxings thisB others otherB b = thisB b == 0
                 || all (\o -> 0 `elem` map otherB (iBridges (state Map.! o))) (others island)
 
+narrowAll :: State -> [State]
+narrowAll s = narrow (Set.fromList (Map.keys s)) s
+
 counts :: State -> [Int]
 counts = (map (length.iBridges)) . Map.elems
 
