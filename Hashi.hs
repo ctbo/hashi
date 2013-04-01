@@ -97,6 +97,8 @@ data IslandState = IslandState { iConstraint :: Int
                                , rightNeighbor :: Maybe Index
                                , bottomNeighbor :: Maybe Index
                                , leftNeighbor :: Maybe Index
+                               , rightXings :: [Index] -- islands whose bottom bridges cross with our right
+                               , bottomXings :: [Index] -- islands whose right bridges cross with our bottom
                                , iBridges :: [Bridges]
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
@@ -110,17 +112,22 @@ stateFromProblem p = state
           state = Map.fromList $ map f islands
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, newisland)
-              where newisland = IslandState n (top i) (right i) (bottom i) (left i) bridges
+              where newisland = IslandState n (top i) (right i) (bottom i) (left i) rx bx bridges
                     bridges = filter h $ nBridges n
                     h (Bridges t r b l) =  (topNeighbor newisland /= Nothing || t == 0)
                                         && (rightNeighbor newisland /= Nothing || r == 0)
                                         && (bottomNeighbor newisland /= Nothing || b == 0)
                                         && (leftNeighbor newisland /= Nothing || l == 0)
+                    rx = map fst $ filter (xing (i, newisland)) (Map.assocs state)
+                    bx = map fst $ filter (flip xing (i, newisland)) (Map.assocs state)
           top    (r, c) = find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (r, c) = find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
           bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
           left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
+          xing ((r1, c1), s1) ((r2, c2), s2) = case (rightNeighbor s1, bottomNeighbor s2) of
+                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                   otherwise                      -> False
 
 
 -- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
