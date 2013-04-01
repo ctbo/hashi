@@ -2,7 +2,9 @@ import Data.Array.IArray
 import Control.Monad
 import Control.Monad.Instances()
 import Data.List (find)
+import Data.Maybe (maybeToList)
 import qualified Data.Map as Map
+import qualified Data.Set as Set
 
 data Field = Water | Island Int deriving (Eq)
 instance Show Field where
@@ -59,7 +61,7 @@ sampleProblem = unlines
 
 data Bridges = Bridges { topB :: Int
                        , rightB :: Int
-                       , bottmB :: Int
+                       , bottomB :: Int
                        , leftB :: Int
                        } deriving (Eq, Show)
 
@@ -112,3 +114,24 @@ blockingPairs s = map xtract $ filter xing pairs
                    (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
                    otherwise                      -> False
 
+narrow :: Set.Set Index -> State -> [State]
+narrow seed state = if Set.null seed then [state] else result
+    where (i, seed') = Set.deleteFindMin seed
+          island = state Map.! i
+          bs = bridges island
+          bs' = filter (match topB topNeighbor bottomB)
+              $ filter (match rightB rightNeighbor leftB)
+              $ filter (match bottomB bottomNeighbor topB)
+              $ filter (match leftB leftNeighbor rightB) bs
+          result = if null bs'
+                   then []
+                   else if bs == bs' 
+                        then narrow seed' state
+                        else let newSeeds = Set.fromList $ concatMap (maybeToList.($island)) 
+                                                                     [topNeighbor, rightNeighbor
+                                                                     , bottomNeighbor, leftNeighbor]
+                             in narrow (Set.union seed' newSeeds)
+                                       (Map.insert i (island {bridges = bs'}) state)
+          match thisB neighbor otherB b = case neighbor island of
+                Nothing -> True
+                Just i' -> thisB b `elem` (map otherB $ bridges $ state Map.! i')
