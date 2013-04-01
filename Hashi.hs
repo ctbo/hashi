@@ -93,10 +93,10 @@ nBridges n = filter f allBridges
     where f (Bridges t r b l) = t+r+b+l == n
 
 data IslandState = IslandState { iConstraint :: Int
-                               , topNeighbor :: Maybe Index
-                               , rightNeighbor :: Maybe Index
-                               , bottomNeighbor :: Maybe Index
-                               , leftNeighbor :: Maybe Index
+                               , topNeighbor :: [Index]
+                               , rightNeighbor :: [Index]
+                               , bottomNeighbor :: [Index]
+                               , leftNeighbor :: [Index]
                                , rightXings :: [Index] -- islands whose bottom bridges cross with our right
                                , bottomXings :: [Index] -- islands whose right bridges cross with our bottom
                                , iBridges :: [Bridges]
@@ -114,20 +114,20 @@ stateFromProblem p = state
           f (i, Island n) = (i, newisland)
               where newisland = IslandState n (top i) (right i) (bottom i) (left i) rx bx bridges
                     bridges = filter h $ nBridges n
-                    h (Bridges t r b l) =  (topNeighbor newisland /= Nothing || t == 0)
-                                        && (rightNeighbor newisland /= Nothing || r == 0)
-                                        && (bottomNeighbor newisland /= Nothing || b == 0)
-                                        && (leftNeighbor newisland /= Nothing || l == 0)
+                    h (Bridges t r b l) =  (not (null (topNeighbor newisland)) || t == 0)
+                                        && (not (null (rightNeighbor newisland)) || r == 0)
+                                        && (not (null (bottomNeighbor newisland)) || b == 0)
+                                        && (not (null (leftNeighbor newisland)) || l == 0)
                     rx = map fst $ filter (xing (i, newisland)) (Map.assocs state)
                     bx = map fst $ filter (flip xing (i, newisland)) (Map.assocs state)
-          top    (r, c) = find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
-          right  (r, c) = find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
-          bottom (r, c) = find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
-          left   (r, c) = find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
+          top    (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
+          right  (r, c) = maybeToList $ find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
+          bottom (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
+          left   (r, c) = maybeToList $ find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
           islandIndex i = isIsland (p!i)
           xing ((r1, c1), s1) ((r2, c2), s2) = case (rightNeighbor s1, bottomNeighbor s2) of
-                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                   otherwise                      -> False
+                   ([(_, c1')], [(r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                   otherwise                -> False
 
 
 -- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
@@ -137,8 +137,8 @@ blockingPairs s = map xtract $ filter xing pairs
     where pairs = [(a1, a2) | a1 <- Map.assocs s, a2 <- Map.assocs s]
           xtract ((i1, _), (i2, _)) = (i1, i2)
           xing (((r1, c1), s1), ((r2, c2), s2)) = case (rightNeighbor s1, bottomNeighbor s2) of
-                   (Just (_, c1'), Just (r2', _)) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                   otherwise                      -> False
+                   ([(_, c1')], [(r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                   otherwise                -> False
 
 narrow :: Set.Set Index -> State -> [State]
 narrow seed state = if Set.null seed then [state] else result
@@ -153,14 +153,14 @@ narrow seed state = if Set.null seed then [state] else result
                    then []
                    else if bs == bs' 
                         then narrow seed' state
-                        else let newSeeds = Set.fromList $ concatMap (maybeToList.($island)) 
+                        else let newSeeds = Set.fromList $ concatMap ($island) 
                                                                      [topNeighbor, rightNeighbor
                                                                      , bottomNeighbor, leftNeighbor]
                              in narrow (Set.union seed' newSeeds)
                                        (Map.insert i (island {iBridges = bs'}) state)
           match thisB neighbor otherB b = case neighbor island of
-                Nothing -> True
-                Just i' -> thisB b `elem` (map otherB $ iBridges $ state Map.! i')
+                []   -> True
+                [i'] -> thisB b `elem` (map otherB $ iBridges $ state Map.! i')
 
 counts :: State -> [Int]
 counts = (map (length.iBridges)) . Map.elems
