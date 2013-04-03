@@ -5,6 +5,12 @@
 
 {-# LANGUAGE  QuasiQuotes #-}
 
+module Hashi ( Problem
+             , State
+             , readProblem
+             , solve
+             , showStateEPS) where
+
 import Data.Array.IArray
 import Control.Monad
 import Control.Monad.Instances()
