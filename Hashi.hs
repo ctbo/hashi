@@ -60,37 +60,6 @@ readProblem s = do
             let rows = length pl
             return $ listArray ((0, 0), (rows-1, columns-1)) $ concat pl 
 
-sampleProblem :: String
-sampleProblem = unlines
-    [ "2.2..2."
-    , "......1"
-    , "6.5.3.."
-    , ".1....3"
-    , "3.1..1."
-    , ".3..8.5"
-    , "4.2...."
-    , ".2..5.2"
-    , "2..1..."
-    , "..2.5.3"
-    ]
-
-sampleProblemHard :: String
-sampleProblemHard = unlines
-    ["2.2...3.3"
-    ,".2..3..3."
-    ,"3....1..3"
-    ,".3.2...2."
-    ,"4.3.2...3"
-    ,".3.2.3.3."
-    ,"3.....2.4"
-    ,".3..3..1."
-    ,"3.2...4.5"
-    ,".2...5.2."
-    ,"3.3.2.3.2"
-    ,".2...3..."
-    ,"3..3..6.2"
-    ]
-
 data Bridges = Bridges { topB :: Int
                        , rightB :: Int
                        , bottomB :: Int
@@ -118,9 +87,6 @@ data IslandState = IslandState { iConstraint :: Int
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
 
-(.+) :: (Int, Int) -> (Int, Int) -> (Int, Int)
-(a, b) .+ (c, d) = (a+c, b+d)
-
 stateFromProblem :: Problem -> State
 stateFromProblem p = state
     where ((0, 0), (rn, cn)) = bounds p
@@ -135,6 +101,7 @@ stateFromProblem p = state
                                         && (not (null (leftNeighbor newisland)) || l == 0)
                     rx = map fst $ filter (xing (i, newisland)) (Map.assocs state)
                     bx = map fst $ filter (flip xing (i, newisland)) (Map.assocs state)
+          f (_, Water) = undefined -- f is only called on islands
           top    (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (r, c) = maybeToList $ find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
           bottom (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
@@ -142,18 +109,7 @@ stateFromProblem p = state
           islandIndex i = isIsland (p!i)
           xing ((r1, c1), s1) ((r2, c2), s2) = case (rightNeighbor s1, bottomNeighbor s2) of
                    ([(_, c1')], [(r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                   otherwise                -> False
-
-
--- |'blockingPairs' returns all pairs '(i1, i2)' of indexes of islands where the 
--- bridge to the right from 'i1' would cross the bridge to the bottom from 'i2'
-blockingPairs :: State -> [(Index, Index)]
-blockingPairs s = map xtract $ filter xing pairs
-    where pairs = [(a1, a2) | a1 <- Map.assocs s, a2 <- Map.assocs s]
-          xtract ((i1, _), (i2, _)) = (i1, i2)
-          xing (((r1, c1), s1), ((r2, c2), s2)) = case (rightNeighbor s1, bottomNeighbor s2) of
-                   ([(_, c1')], [(r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                   otherwise                -> False
+                   _                        -> False
 
 narrow :: Set.Set Index -> State -> [State]
 narrow seed state = if Set.null seed then [state] else result
@@ -179,14 +135,12 @@ narrow seed state = if Set.null seed then [state] else result
           match thisB neighbor otherB b = case neighbor island of
                 []   -> True
                 [i'] -> thisB b `elem` (map otherB $ iBridges $ state Map.! i')
+                _    -> undefined -- there is at most one neighbor
           noxings thisB others otherB b = thisB b == 0
                 || all (\o -> 0 `elem` map otherB (iBridges (state Map.! o))) (others island)
 
 narrowAll :: State -> [State]
 narrowAll s = narrow (Set.fromList (Map.keys s)) s
-
-counts :: State -> [Int]
-counts = (map (length.iBridges)) . Map.elems
 
 connectedComponents :: State -> [Set.Set Index]
 connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
@@ -224,7 +178,7 @@ showStateEPS state = [fileAsString|hashiheader.eps|]
                                                ++ show r' ++ " " ++ show c' ++ " "
                                                ++ show n ++ " bridge\n"
                                        else ""
-                                otherwise -> ""
+                                _   -> ""
 
 solve :: Problem -> [State]
 solve p = concatMap solve' $ narrowAll $ stateFromProblem p
