@@ -14,7 +14,7 @@ main = do
           [filename] -> do
                      s <- readFile filename
                      work s (filename ++ ".solution.eps")
-          [] -> error "Usage: solve filename [#solutions]"
+          [] -> error "Usage: solve filename\nWill write solution to filename.solution.eps"
           _  -> error "Too many arguments."
   where work s outfile = case readProblem s of
              Left e -> putStrLn e
