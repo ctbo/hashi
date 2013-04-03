@@ -196,5 +196,8 @@ solve' state = case (connectedComponents state, find uncertain $ Map.assocs stat
 
 solve'' :: State -> (Index, IslandState) -> [State]
 solve'' state (i, island) = concatMap f $ iBridges island
-    where f b = [Map.insert i (island {iBridges = [b]}) state] >>= narrow (Set.singleton i) >>= solve'
-
+    where f b = [Map.insert i (island {iBridges = [b]}) state] >>= narrow seed >>= solve'
+          seed = Set.fromList $ concatMap ($island) [topNeighbor, rightNeighbor
+                                                    ,bottomNeighbor, leftNeighbor
+                                                    ,rightXings, bottomXings
+                                                    ]
