@@ -199,7 +199,7 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
 
 
 showStateEPS :: State -> String
-showStateEPS state = epsHeader
+showStateEPS state = [fileAsString|hashiheader.eps|]
                    ++ concatMap bridges (Map.assocs state)
                    ++ concatMap circle (Map.assocs state)
     where circle ((r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
@@ -233,49 +233,3 @@ solve'' :: State -> (Index, IslandState) -> [State]
 solve'' state (i, island) = concatMap f $ iBridges island
     where f b = [Map.insert i (island {iBridges = [b]}) state] >>= narrow (Set.singleton i) >>= solve'
 
-
-epsHeader = [heredoc|%!PS-Adobe-3.0 EPSF-3.0
-%%BoundingBox: 0 0 595 842
-
-/topM 782 def
-/leftM 60 def
-
-/w 20 def
-/r 9 def
-/Helvetica findfont 16 scalefont setfont
-/fontoffset { -4 -5.2 } def
-
-/xform
-{
-    w mul leftM add exch
-    w mul topM exch sub
-} def
-
-/bridge
-{
-    5 1 roll
-    xform moveto
-    xform lineto
-    0 setgray
-    2 eq
-    {
-	6 setlinewidth gsave stroke grestore
-	2 setlinewidth 1 setgray stroke
-    }
-    {
-	2 setlinewidth stroke
-    } ifelse
-}
-def
-
-/circle
-{
-    3 1 roll xform
-    newpath
-    2 copy r 0 360 arc
-    .8 .9 1 setrgbcolor gsave fill grestore
-    1 setlinewidth 0 setgray stroke
-    moveto fontoffset rmoveto 1 string cvs show
-} def
-
-|]
