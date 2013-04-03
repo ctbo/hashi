@@ -1,3 +1,8 @@
+-- Hashi.hs 
+-- a solver for Hashiwokakero puzzles
+-- Copyright (C) 2013 by Harald Bögeholz
+-- See LICENSE file for license information
+
 {-# LANGUAGE  QuasiQuotes #-}
 
 import Data.Array.IArray
