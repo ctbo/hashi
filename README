@@ -1,0 +1,20 @@
+hashi -- (c) 2013 by Harald Bögeholz
+
+Solver for Hashiwokakero puzzles written in Haskell.
+This is open source software under a BSD license, see LICENSE.
+
+Compile with
+
+   ghc -O2 -Wall --make solve.hs
+
+Example use:
+
+   ./solve 7x10easy
+
+This will solve the sample puzzle supplied in the file 7x10easy and write
+the solution to the file 7x10easy.solution.eps. Use your favorite EPS
+viewer to look at the solution.
+
+
+Harald Bögeholz
+bo@ct.de
