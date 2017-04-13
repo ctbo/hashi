@@ -8,6 +8,7 @@
 module Hashi ( Problem
              , State
              , readProblem
+             , layerRange
              , solve
              , showStateEPS) where
 
@@ -63,6 +64,10 @@ readProblemList = (mapM . mapM . mapM) readField . map lines . splitLayers
 type Index = (Int, Int, Int)
 type Problem = Array Index Field
 
+layerRange :: Problem -> (Int, Int)
+layerRange p = (l0, ln)
+   where ((l0,_,_),(ln,_,_)) = bounds p
+
 readProblem :: String -> Either String Problem
 readProblem s = do
             pl <- readProblemList s
@@ -74,7 +79,7 @@ readProblem s = do
             when (columns == 0) $ Left "Problem starts with an empty line."
             unless (all ((== columns) . length) (concat pl)) $ Left "Problem not a cuboid."
             let layers = length pl
-            return $ listArray ((0, 0, 0), (rows-1, columns-1, layers-1)) $ concat $ concat pl 
+            return $ listArray ((0, 0, 0), (layers-1, rows-1, columns-1)) $ concat $ concat pl 
 
 
 data Bridges = Bridges { topB :: Int
@@ -221,16 +226,17 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
 
 
 showStateEPS :: Int -> State -> String
-showStateEPS level state = [fileAsString|hashiheader.eps|]
-                        ++ concatMap bridges (Map.assocs state)
-                        ++ concatMap circle (Map.assocs state)
-    where circle ((r, c, _), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
-          bridges ((r, c, _), island) = right ++ down
-              where right = g rightB rightNeighbor
-                    down = g bottomB bottomNeighbor
+showStateEPS layer state = [fileAsString|hashiheader.eps|]
+                        ++ concatMap bridges islands
+                        ++ concatMap circle islands
+    where islands = filter (\((l,_,_),_) -> l == layer) $ Map.assocs state
+          circle ((_, r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
+          bridges ((_, r, c), island) = right ++ down
+              where right = g upB upNeighbor
+                    down = g rightB rightNeighbor
                     g fB fN = case nub $ map fB $ iBridges island of
                                 [n] -> if n>0
-                                       then let (r', c', _) = head (fN island)
+                                       then let (_, r', c') = head (fN island)
                                             in show r ++ " " ++ show c ++ " " 
                                                ++ show r' ++ " " ++ show c' ++ " "
                                                ++ show n ++ " bridge\n"
