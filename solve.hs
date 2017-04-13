@@ -21,5 +21,5 @@ main = do
              Right p -> do
                    putStrLn $ "Will write first solution to '" ++ outfile ++ "'."
                    let solutions = solve p
-                   when (not (null solutions)) $ writeFile outfile $ showStateEPS $ head solutions
+                   when (not (null solutions)) $ writeFile outfile $ showStateEPS 0 $ head solutions
                    putStrLn $ "Total number of solutions: " ++ show (length solutions)

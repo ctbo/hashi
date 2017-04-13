@@ -14,7 +14,7 @@ module Hashi ( Problem
 import Data.Array.IArray
 import Control.Monad
 import Control.Monad.Instances()
-import Data.List (find, nub)
+import Data.List (find, nub, break)
 import Data.Maybe (maybeToList)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -24,6 +24,9 @@ import Heredoc
 data Field = Water | Island Int deriving (Eq)
 instance Show Field where
     show Water = "."
+    show (Island 10) = "a"
+    show (Island 11) = "b"
+    show (Island 12) = "c"
     show (Island x) = show x
 
 isIsland :: Field -> Bool
@@ -40,88 +43,138 @@ readField '5' = Right $ Island 5
 readField '6' = Right $ Island 6
 readField '7' = Right $ Island 7
 readField '8' = Right $ Island 8
+readField '9' = Right $ Island 9
+readField 'a' = Right $ Island 10
+readField 'b' = Right $ Island 11
+readField 'c' = Right $ Island 12
 readField c = Left $ "Invalid character " ++ show c ++ "."
 
-type ProblemList = [[Field]]
+type ProblemList = [[[Field]]]
+
+splitLayers :: String -> [String]
+splitLayers cs = case break (== '_') cs of
+                   (layer, []) -> [layer]
+                   (layer, '_':'\n':rest) -> layer : splitLayers rest
+
 
 readProblemList ::  String -> Either String ProblemList
-readProblemList = (mapM . mapM) readField . lines
+readProblemList = (mapM . mapM . mapM) readField . map lines . splitLayers
 
-type Index = (Int, Int)
+type Index = (Int, Int, Int)
 type Problem = Array Index Field
 
 readProblem :: String -> Either String Problem
 readProblem s = do
             pl <- readProblemList s
             when (null pl) $ Left "Problem is empty."
-            let columns = length $ head pl
+            let rows = length $ head pl
+            when (rows == 0) $ Left "Problem starts with an empty layer."
+            unless (all ((== rows) . length) pl) $ Left "Problem not a cuboid."
+            let columns = length $ head $ head pl
             when (columns == 0) $ Left "Problem starts with an empty line."
-            unless (all ((== columns) . length) pl) $ Left "Problem not rectangular."
-            let rows = length pl
-            return $ listArray ((0, 0), (rows-1, columns-1)) $ concat pl 
+            unless (all ((== columns) . length) (concat pl)) $ Left "Problem not a cuboid."
+            let layers = length pl
+            return $ listArray ((0, 0, 0), (rows-1, columns-1, layers-1)) $ concat $ concat pl 
+
 
 data Bridges = Bridges { topB :: Int
                        , rightB :: Int
                        , bottomB :: Int
                        , leftB :: Int
+                       , upB :: Int
+                       , downB :: Int
                        } deriving (Eq, Show)
 
 allBridges :: [Bridges]
-allBridges = [Bridges t r b l | t <- [0 .. 2]
-                              , r <- [0 .. 2]
-                              , b <- [0 .. 2]
-                              , l <- [0 .. 2]]
+allBridges = [Bridges t r b l u d | t <- [0 .. 2]
+                                  , r <- [0 .. 2]
+                                  , b <- [0 .. 2]
+                                  , l <- [0 .. 2]
+                                  , u <- [0 .. 2]
+                                  , d <- [0 .. 2]]
 
 nBridges :: Int -> [Bridges]
 nBridges n = filter f allBridges
-    where f (Bridges t r b l) = t+r+b+l == n
+    where f (Bridges t r b l u d) = t+r+b+l+u+d == n
 
 data IslandState = IslandState { iConstraint :: Int
                                , topNeighbor :: [Index]
                                , rightNeighbor :: [Index]
                                , bottomNeighbor :: [Index]
                                , leftNeighbor :: [Index]
-                               , rightXings :: [Index] -- islands whose bottom bridges cross with our right
-                               , bottomXings :: [Index] -- islands whose right bridges cross with our bottom
+                               , upNeighbor :: [Index]
+                               , downNeighbor :: [Index]
+                               , rightXings :: [Index] -- islands whose bottom or up bridges cross with our right
+                               , bottomXings :: [Index] -- islands whose right or up bridges cross with our bottom
+                               , upXings :: [Index] -- islands whose bottom or right bridges cross with our up
                                , iBridges :: [Bridges]
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
 
 stateFromProblem :: Problem -> State
 stateFromProblem p = state
-    where ((0, 0), (rn, cn)) = bounds p
+    where ((0, 0, 0), (rn, cn, ln)) = bounds p
           state = Map.fromList $ map f islands
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, newisland)
-              where newisland = IslandState n (top i) (right i) (bottom i) (left i) rx bx bridges
+              where newisland = IslandState n (top i) (right i) (bottom i) (left i) (up i) (down i) rx bx ux bridges
                     bridges = filter h $ nBridges n
-                    h (Bridges t r b l) =  (not (null (topNeighbor newisland)) || t == 0)
-                                        && (not (null (rightNeighbor newisland)) || r == 0)
-                                        && (not (null (bottomNeighbor newisland)) || b == 0)
-                                        && (not (null (leftNeighbor newisland)) || l == 0)
-                    rx = map fst $ filter (xing (i, newisland)) (Map.assocs state)
-                    bx = map fst $ filter (flip xing (i, newisland)) (Map.assocs state)
+                    h (Bridges t r b l u d) =  (not (null (topNeighbor newisland)) || t == 0)
+                                            && (not (null (rightNeighbor newisland)) || r == 0)
+                                            && (not (null (bottomNeighbor newisland)) || b == 0)
+                                            && (not (null (leftNeighbor newisland)) || l == 0)
+                                            && (not (null (upNeighbor newisland)) || u == 0)
+                                            && (not (null (downNeighbor newisland)) || d == 0)
+                    rx = map fst $ filter (rxing (i, newisland)) (Map.assocs state)
+                    bx = map fst $ filter (bxing (i, newisland)) (Map.assocs state)
+                    ux = map fst $ filter (uxing (i, newisland)) (Map.assocs state)
           f (_, Water) = undefined -- f is only called on islands
-          top    (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r-1, r-2 .. 0]]
-          right  (r, c) = maybeToList $ find islandIndex [(r, cc) | cc <- [c+1 .. cn]]
-          bottom (r, c) = maybeToList $ find islandIndex [(rr, c) | rr <- [r+1 .. rn]]
-          left   (r, c) = maybeToList $ find islandIndex [(r, cc) | cc <- [c-1, c-2 .. 0]]
+          top    (r, c, l) = maybeToList $ find islandIndex [(rr, c, l) | rr <- [r-1, r-2 .. 0]]
+          right  (r, c, l) = maybeToList $ find islandIndex [(r, cc, l) | cc <- [c+1 .. cn]]
+          bottom (r, c, l) = maybeToList $ find islandIndex [(rr, c, l) | rr <- [r+1 .. rn]]
+          left   (r, c, l) = maybeToList $ find islandIndex [(r, cc, l) | cc <- [c-1, c-2 .. 0]]
+          up     (r, c, l) = maybeToList $ find islandIndex [(r, c, ll) | ll <- [l+1 ..ln]]
+          down   (r, c, l) = maybeToList $ find islandIndex [(r, c, ll) | ll <- [l-1, l-2 .. 0]]
           islandIndex i = isIsland (p!i)
-          xing ((r1, c1), s1) ((r2, c2), s2) = case (rightNeighbor s1, bottomNeighbor s2) of
-                   ([(_, c1')], [(r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                   _                        -> False
-
+          rxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+                ( case (rightNeighbor s1, bottomNeighbor s2) of
+                    ([(_, c1', _)], [(r2', _, _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                    _                              -> False
+                ) || case (rightNeighbor s1, upNeighbor s2) of
+                     ([(_, c1', _)], [(_, _, l2')]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
+                     _                              -> False
+          bxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+                ( case (bottomNeighbor s1, rightNeighbor s2) of
+                    ([(r1', _, _)], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
+                    _ -> False
+                ) || case (bottomNeighbor s1, upNeighbor s2) of
+                       ([(r1', _, _)], [(_, _, l2')]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
+                       _ -> False
+          uxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+                ( case (upNeighbor s1, bottomNeighbor s2) of
+                  ([(_, _, l1')], [(r2',_, _)]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
+                  _ -> False
+                ) || case (upNeighbor s1, rightNeighbor s2) of
+                     ([(_, _, l1')], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
+                     _ -> False
+          
 narrow :: Set.Set Index -> State -> [State]
 narrow seed state = if Set.null seed then [state] else result
     where (i, seed') = Set.deleteFindMin seed
           island = state Map.! i
           bs = iBridges island
           bs' = filter (noxings rightB rightXings bottomB)
+              $ filter (noxings rightB rightXings upB)
               $ filter (noxings bottomB bottomXings rightB)
+              $ filter (noxings bottomB bottomXings upB)
+              $ filter (noxings upB upXings rightB)
+              $ filter (noxings upB upXings bottomB)
               $ filter (match topB topNeighbor bottomB)
               $ filter (match rightB rightNeighbor leftB)
               $ filter (match bottomB bottomNeighbor topB)
-              $ filter (match leftB leftNeighbor rightB) bs
+              $ filter (match leftB leftNeighbor rightB)
+              $ filter (match upB upNeighbor downB)
+              $ filter (match downB downNeighbor upB) bs
           result = if null bs'
                    then []
                    else if bs == bs' 
@@ -129,6 +182,7 @@ narrow seed state = if Set.null seed then [state] else result
                         else let newSeeds = Set.fromList $ concatMap ($island) 
                                                                      [topNeighbor, rightNeighbor
                                                                      , bottomNeighbor, leftNeighbor
+                                                                     , upNeighbor, downNeighbor
                                                                      , rightXings, bottomXings]
                              in narrow (Set.union seed' newSeeds)
                                        (Map.insert i (island {iBridges = bs'}) state)
@@ -158,27 +212,31 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
                                                         $ filter f [(topB, topNeighbor)
                                                                    , (rightB, rightNeighbor)
                                                                    , (bottomB, bottomNeighbor)
-                                                                   , (leftB, leftNeighbor)]
+                                                                   , (leftB, leftNeighbor)
+                                                                   , (upB, upNeighbor)
+                                                                   , (downB, downNeighbor)
+                                                                   ]
                         f (fB, _) = not $ 0 `elem` (map fB (iBridges island))
                         seed'' = (Set.union seed''' conn) Set.\\ head cs
 
 
-showStateEPS :: State -> String
-showStateEPS state = [fileAsString|hashiheader.eps|]
-                   ++ concatMap bridges (Map.assocs state)
-                   ++ concatMap circle (Map.assocs state)
-    where circle ((r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
-          bridges ((r, c), island) = right ++ down
+showStateEPS :: Int -> State -> String
+showStateEPS level state = [fileAsString|hashiheader.eps|]
+                        ++ concatMap bridges (Map.assocs state)
+                        ++ concatMap circle (Map.assocs state)
+    where circle ((r, c, _), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
+          bridges ((r, c, _), island) = right ++ down
               where right = g rightB rightNeighbor
                     down = g bottomB bottomNeighbor
                     g fB fN = case nub $ map fB $ iBridges island of
                                 [n] -> if n>0
-                                       then let (r', c') = head (fN island)
+                                       then let (r', c', _) = head (fN island)
                                             in show r ++ " " ++ show c ++ " " 
                                                ++ show r' ++ " " ++ show c' ++ " "
                                                ++ show n ++ " bridge\n"
                                        else ""
                                 _   -> ""
+
 
 solve :: Problem -> [State]
 solve p = concatMap solve' $ narrowAll $ stateFromProblem p
@@ -198,6 +256,7 @@ solve'' :: State -> (Index, IslandState) -> [State]
 solve'' state (i, island) = concatMap f $ iBridges island
     where f b = [Map.insert i (island {iBridges = [b]}) state] >>= narrow seed >>= solve'
           seed = Set.fromList $ concatMap ($island) [topNeighbor, rightNeighbor
-                                                    ,bottomNeighbor, leftNeighbor
-                                                    ,rightXings, bottomXings
+                                                    , bottomNeighbor, leftNeighbor
+                                                    , upNeighbor, downNeighbor
+                                                    , rightXings, bottomXings, upXings
                                                     ]
