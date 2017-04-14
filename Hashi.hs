@@ -1,6 +1,6 @@
 -- Hashi.hs 
 -- a solver for Hashiwokakero puzzles
--- Copyright (C) 2013 by Harald Bögeholz
+-- Copyright (C) 2017 by Harald Bögeholz
 -- See LICENSE file for license information
 
 {-# LANGUAGE  QuasiQuotes #-}
@@ -14,8 +14,7 @@ module Hashi ( Problem
 
 import Data.Array.IArray
 import Control.Monad
-import Control.Monad.Instances()
-import Data.List (find, nub, break)
+import Data.List (find, nub)
 import Data.Maybe (maybeToList)
 import qualified Data.Map as Map
 import qualified Data.Set as Set
@@ -118,7 +117,7 @@ type State = Map.Map Index IslandState
 
 stateFromProblem :: Problem -> State
 stateFromProblem p = state
-    where ((0, 0, 0), (rn, cn, ln)) = bounds p
+    where ((0, 0, 0), (ln, rn, cn)) = bounds p
           state = Map.fromList $ map f islands
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, newisland)
@@ -134,33 +133,33 @@ stateFromProblem p = state
                     bx = map fst $ filter (bxing (i, newisland)) (Map.assocs state)
                     ux = map fst $ filter (uxing (i, newisland)) (Map.assocs state)
           f (_, Water) = undefined -- f is only called on islands
-          top    (r, c, l) = maybeToList $ find islandIndex [(rr, c, l) | rr <- [r-1, r-2 .. 0]]
-          right  (r, c, l) = maybeToList $ find islandIndex [(r, cc, l) | cc <- [c+1 .. cn]]
-          bottom (r, c, l) = maybeToList $ find islandIndex [(rr, c, l) | rr <- [r+1 .. rn]]
-          left   (r, c, l) = maybeToList $ find islandIndex [(r, cc, l) | cc <- [c-1, c-2 .. 0]]
-          up     (r, c, l) = maybeToList $ find islandIndex [(r, c, ll) | ll <- [l+1 ..ln]]
-          down   (r, c, l) = maybeToList $ find islandIndex [(r, c, ll) | ll <- [l-1, l-2 .. 0]]
+          top    (l, r, c) = maybeToList $ find islandIndex [(l, rr, c) | rr <- [r-1, r-2 .. 0]]
+          right  (l, r, c) = maybeToList $ find islandIndex [(l, r, cc) | cc <- [c+1 .. cn]]
+          bottom (l, r, c) = maybeToList $ find islandIndex [(l, rr, c) | rr <- [r+1 .. rn]]
+          left   (l, r, c) = maybeToList $ find islandIndex [(l, r, cc) | cc <- [c-1, c-2 .. 0]]
+          up     (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l+1 ..ln]]
+          down   (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l-1, l-2 .. 0]]
           islandIndex i = isIsland (p!i)
-          rxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+          rxing ((l1,r1, c1), s1) ((l2, r2, c2), s2) = 
                 ( case (rightNeighbor s1, bottomNeighbor s2) of
-                    ([(_, c1', _)], [(r2', _, _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                    ([(_, c1', _)], [(_, _, r2')]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
                     _                              -> False
                 ) || case (rightNeighbor s1, upNeighbor s2) of
-                     ([(_, c1', _)], [(_, _, l2')]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
+                     ([(_, c1', _)], [(l2', _, _)]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
                      _                              -> False
-          bxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+          bxing ((l1, r1, c1), s1) ((l2, r2, c2), s2) = 
                 ( case (bottomNeighbor s1, rightNeighbor s2) of
-                    ([(r1', _, _)], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
+                    ([(_, _, r1')], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
                     _ -> False
                 ) || case (bottomNeighbor s1, upNeighbor s2) of
-                       ([(r1', _, _)], [(_, _, l2')]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
+                       ([(_, _, r1')], [(l2', _, _)]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
                        _ -> False
-          uxing ((r1, c1, l1), s1) ((r2, c2, l2), s2) = 
+          uxing ((l1, r1, c1), s1) ((l2, r2, c2), s2) = 
                 ( case (upNeighbor s1, bottomNeighbor s2) of
-                  ([(_, _, l1')], [(r2',_, _)]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
+                  ([(l1', _, _)], [(_,_, r2')]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
                   _ -> False
                 ) || case (upNeighbor s1, rightNeighbor s2) of
-                     ([(_, _, l1')], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
+                     ([(l1', _, _)], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
                      _ -> False
           
 narrow :: Set.Set Index -> State -> [State]
@@ -231,9 +230,9 @@ showStateEPS layer state = [fileAsString|hashiheader.eps|]
                         ++ concatMap circle islands
     where islands = filter (\((l,_,_),_) -> l == layer) $ Map.assocs state
           circle ((_, r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
-          bridges ((_, r, c), island) = right ++ down
-              where right = g upB upNeighbor
-                    down = g rightB rightNeighbor
+          bridges ((_, r, c), island) = right ++ bottom
+              where right = g rightB rightNeighbor
+                    bottom = g bottomB bottomNeighbor
                     g fB fN = case nub $ map fB $ iBridges island of
                                 [n] -> if n>0
                                        then let (_, r', c') = head (fN island)
