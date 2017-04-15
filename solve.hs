@@ -1,6 +1,6 @@
 -- solve.hs 
 -- a solver for Hashiwokakero puzzles
--- Copyright (C) 2013 by Harald Bögeholz
+-- Copyright (C) 2017 by Harald Bögeholz
 -- See LICENSE file for license information
 
 import Hashi
@@ -22,6 +22,9 @@ main = do
                    let filename = basename ++ ".solution" ++ if is3D p then ".html" else ".eps"
                    putStrLn $ "Will write first solution to '" ++ filename ++ "'."
                    let solutions = solve p
-                   when (not (null solutions)) $ writeFile filename $ showState $ head solutions
+                   when (not (null solutions)) $ do
+                        writeFile filename $ showState $ head solutions
+                        putStrLn $ "Wrote '" ++ filename ++ "'."
+                        putStrLn "Counting all solutions ..."
                    putStrLn $ "Total number of solutions: " ++ show (length solutions)
                      where showState = if is3D p then x3dshowState else showStateEPS
