@@ -8,9 +8,10 @@
 module Hashi ( Problem
              , State
              , readProblem
-             , layerRange
+             , is3D
              , solve
-             , showStateEPS) where
+             , showStateEPS
+             , x3dshowState) where
 
 import Data.Array.IArray
 import Control.Monad
@@ -63,9 +64,9 @@ readProblemList = (mapM . mapM . mapM) readField . map lines . splitLayers
 type Index = (Int, Int, Int)
 type Problem = Array Index Field
 
-layerRange :: Problem -> (Int, Int)
-layerRange p = (l0, ln)
-   where ((l0,_,_),(ln,_,_)) = bounds p
+is3D :: Problem -> Bool
+is3D p = ln > 0
+  where (_,(ln,_,_)) = bounds p
 
 readProblem :: String -> Either String Problem
 readProblem s = do
@@ -224,25 +225,6 @@ connectedComponents state = cc [] Set.empty (Set.fromList (Map.keys state))
                         seed'' = (Set.union seed''' conn) Set.\\ head cs
 
 
-showStateEPS :: Int -> State -> String
-showStateEPS layer state = [fileAsString|hashiheader.eps|]
-                        ++ concatMap bridges islands
-                        ++ concatMap circle islands
-    where islands = filter (\((l,_,_),_) -> l == layer) $ Map.assocs state
-          circle ((_, r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
-          bridges ((_, r, c), island) = right ++ bottom
-              where right = g rightB rightNeighbor
-                    bottom = g bottomB bottomNeighbor
-                    g fB fN = case nub $ map fB $ iBridges island of
-                                [n] -> if n>0
-                                       then let (_, r', c') = head (fN island)
-                                            in show r ++ " " ++ show c ++ " " 
-                                               ++ show r' ++ " " ++ show c' ++ " "
-                                               ++ show n ++ " bridge\n"
-                                       else ""
-                                _   -> ""
-
-
 solve :: Problem -> [State]
 solve p = concatMap solve' $ narrowAll $ stateFromProblem p
 
@@ -265,3 +247,118 @@ solve'' state (i, island) = concatMap f $ iBridges island
                                                     , upNeighbor, downNeighbor
                                                     , rightXings, bottomXings, upXings
                                                     ]
+
+-- EPS output ------------------------------------
+
+showStateEPS :: State -> String
+showStateEPS state = [fileAsString|hashiheader.eps|]
+                  ++ concatMap bridges islands
+                  ++ concatMap circle islands
+    where islands = Map.assocs state
+          circle ((_, r, c), island) = show r ++ " " ++ show c ++ " " ++ show (iConstraint island) ++ " circle\n"
+          bridges ((_, r, c), island) = right ++ bottom
+              where right = g rightB rightNeighbor
+                    bottom = g bottomB bottomNeighbor
+                    g fB fN = case nub $ map fB $ iBridges island of
+                                [n] -> if n>0
+                                       then let (_, r', c') = head (fN island)
+                                            in show r ++ " " ++ show c ++ " " 
+                                               ++ show r' ++ " " ++ show c' ++ " "
+                                               ++ show n ++ " bridge\n"
+                                       else ""
+                                _   -> ""
+
+-- X3D/HTML output ------------------------------
+
+type X3dVec3d = (Float, Float, Float)
+
+(.+) :: X3dVec3d -> X3dVec3d -> X3dVec3d
+(x, y, z) .+ (x', y', z') = (x+x', y+y', z+z')
+
+(./) :: X3dVec3d -> Float -> X3dVec3d
+(x, y, z) ./ f = (x/f, y/f, z/f)
+
+x3dxform :: Index -> X3dVec3d
+x3dxform (l, r, c) = (3.0 * fromIntegral c, -3.0 * fromIntegral r, 3.0 * fromIntegral l)
+
+x3dshowVec3d :: X3dVec3d -> String
+x3dshowVec3d (x, y, z) = "\"" ++ show x ++ " " ++ show y ++ " " ++ show z ++ "\""
+
+x3dshowindex :: Index -> String
+x3dshowindex = x3dshowVec3d . x3dxform
+
+x3dshowText :: Index -> String -> String
+x3dshowText i t  =  "<transform translation=" ++ x3dshowindex i ++ ">\n"
+                ++ "  <shape>\n"
+                ++ "    <appearance><material diffuseColor=\"0 0 1\"></material></appearance>\n"
+                ++ "    <text string=\"" ++ t ++ "\" solid=\"false\" />\n"
+                ++ "  </shape>\n"
+                ++ "</transform>\n"
+
+x3drotRight :: String
+x3drotRight = "0 0 1 1.5707963"
+
+x3drotBottom :: String
+x3drotBottom = "0 0 1 0"
+
+x3drotUp :: String
+x3drotUp = "1 0 0 1.5707963"
+
+x3dshowBridge :: X3dVec3d -> X3dVec3d -> String -> String
+x3dshowBridge center scale rotation
+    = "<transform translation=" ++ x3dshowVec3d center
+       ++ " scale="++ x3dshowVec3d scale 
+       ++ " rotation=\"" ++ rotation ++ "\">\n"
+   ++ "  <shape> \n"
+   ++ "    <appearance><material diffuseColor=\".5 .5 .5\"></material></appearance> \n"
+   ++ "    <cylinder/>\n"
+   ++ "  </shape> \n"
+   ++ "</transform>\n"
+
+x3dshowRightBridge :: Index -> Index -> Int -> String
+x3dshowRightBridge i@(_,_,ci) j@(_,_,cj) n = 
+      case n of
+           1 -> x3dshowBridge center scale x3drotRight
+           2 -> x3dshowBridge (center .+ (0,  0.15, 0)) scale x3drotRight
+             ++ x3dshowBridge (center .+ (0, -0.15, 0)) scale x3drotRight
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (cj-ci) - 0.7, 0.1)
+
+x3dshowBottomBridge :: Index -> Index -> Int -> String
+x3dshowBottomBridge i@(_,ri,_) j@(_,rj,_) n = 
+      case n of
+           1 -> x3dshowBridge center scale x3drotBottom
+           2 -> x3dshowBridge (center .+ ( 0.15, 0, 0)) scale x3drotBottom
+             ++ x3dshowBridge (center .+ (-0.15, 0, 0)) scale x3drotBottom
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (rj-ri) - 0.7, 0.1)
+
+x3dshowUpBridge :: Index -> Index -> Int -> String
+x3dshowUpBridge i@(li,_,_) j@(lj,_,_) n = 
+      case n of
+           1 -> x3dshowBridge center scale x3drotUp
+           2 -> x3dshowBridge (center .+ (0,  0.15, 0)) scale x3drotUp
+             ++ x3dshowBridge (center .+ (0, -0.15, 0)) scale x3drotUp
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (lj-li) - 0.5, 0.1)
+
+x3dshowState :: State -> String
+x3dshowState state =  [fileAsString|hashiheader.html|]
+                   ++ concatMap number islands
+                   ++ concatMap bridges islands
+                   ++ [fileAsString|hashifooter.html|]
+    where islands =  Map.assocs state
+          number (i, island) =  x3dshowText i $ show (iConstraint island)
+          bridges (i, island) = right ++ bottom ++ up
+            where right = g rightB rightNeighbor x3dshowRightBridge
+                  bottom = g bottomB bottomNeighbor x3dshowBottomBridge
+                  up = g upB upNeighbor x3dshowUpBridge
+                  g fB fN fX = case nub $ map fB $ iBridges island of
+                                 [n] -> if n > 0
+                                        then fX i (head (fN island)) n
+                                        else ""
+                                 _   -> ""
+
