@@ -109,9 +109,12 @@ data IslandState = IslandState { iConstraint :: Int
                                , leftNeighbor :: [Index]
                                , upNeighbor :: [Index]
                                , downNeighbor :: [Index]
-                               , rightXings :: [Index] -- islands whose bottom or up bridges cross with our right
-                               , bottomXings :: [Index] -- islands whose right or up bridges cross with our bottom
-                               , upXings :: [Index] -- islands whose bottom or right bridges cross with our up
+                               , rightXbottom :: [Index] -- islands whose bottom bridges cross with our right
+                               , rightXup :: [Index] -- etc.
+                               , bottomXright :: [Index]
+                               , bottomXup :: [Index]
+                               , upXright :: [Index]
+                               , upXbottom :: [Index]
                                , iBridges :: [Bridges]
                                } deriving (Eq, Show)
 type State = Map.Map Index IslandState
@@ -122,7 +125,21 @@ stateFromProblem p = state
           state = Map.fromList $ map f islands
           islands = [e | e@(_, Island _) <- assocs p]
           f (i, Island n) = (i, newisland)
-              where newisland = IslandState n (top i) (right i) (bottom i) (left i) (up i) (down i) rx bx ux bridges
+              where newisland = IslandState { iConstraint = n
+                                            , topNeighbor = top i
+                                            , rightNeighbor = right i
+                                            , bottomNeighbor = bottom i
+                                            , leftNeighbor = left i
+                                            , upNeighbor = up i
+                                            , downNeighbor = down i
+                                            , rightXbottom = rxb
+                                            , rightXup = rxu
+                                            , bottomXright = bxr
+                                            , bottomXup = bxu
+                                            , upXright = uxr
+                                            , upXbottom = uxb
+                                            , iBridges = bridges
+                                            }
                     bridges = filter h $ nBridges n
                     h (Bridges t r b l u d) =  (not (null (topNeighbor newisland)) || t == 0)
                                             && (not (null (rightNeighbor newisland)) || r == 0)
@@ -130,9 +147,12 @@ stateFromProblem p = state
                                             && (not (null (leftNeighbor newisland)) || l == 0)
                                             && (not (null (upNeighbor newisland)) || u == 0)
                                             && (not (null (downNeighbor newisland)) || d == 0)
-                    rx = map fst $ filter (rxing (i, newisland)) (Map.assocs state)
-                    bx = map fst $ filter (bxing (i, newisland)) (Map.assocs state)
-                    ux = map fst $ filter (uxing (i, newisland)) (Map.assocs state)
+                    rxb = map fst $ filter (rxingb (i, newisland)) (Map.assocs state)
+                    rxu = map fst $ filter (rxingu (i, newisland)) (Map.assocs state)
+                    bxr = map fst $ filter (bxingr (i, newisland)) (Map.assocs state)
+                    bxu = map fst $ filter (bxingu (i, newisland)) (Map.assocs state)
+                    uxr = map fst $ filter (uxingr (i, newisland)) (Map.assocs state)
+                    uxb = map fst $ filter (uxingb (i, newisland)) (Map.assocs state)
           f (_, Water) = undefined -- f is only called on islands
           top    (l, r, c) = maybeToList $ find islandIndex [(l, rr, c) | rr <- [r-1, r-2 .. 0]]
           right  (l, r, c) = maybeToList $ find islandIndex [(l, r, cc) | cc <- [c+1 .. cn]]
@@ -141,39 +161,42 @@ stateFromProblem p = state
           up     (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l+1 ..ln]]
           down   (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l-1, l-2 .. 0]]
           islandIndex i = isIsland (p!i)
-          rxing ((l1,r1, c1), s1) ((l2, r2, c2), s2) = 
-                ( case (rightNeighbor s1, bottomNeighbor s2) of
-                    ([(_, c1', _)], [(_, _, r2')]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
-                    _                              -> False
-                ) || case (rightNeighbor s1, upNeighbor s2) of
-                     ([(_, c1', _)], [(l2', _, _)]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
-                     _                              -> False
-          bxing ((l1, r1, c1), s1) ((l2, r2, c2), s2) = 
-                ( case (bottomNeighbor s1, rightNeighbor s2) of
-                    ([(_, _, r1')], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
-                    _ -> False
-                ) || case (bottomNeighbor s1, upNeighbor s2) of
-                       ([(_, _, r1')], [(l2', _, _)]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
-                       _ -> False
-          uxing ((l1, r1, c1), s1) ((l2, r2, c2), s2) = 
-                ( case (upNeighbor s1, bottomNeighbor s2) of
+          rxingb ((_,r1, c1), s1) ((_, r2, c2), s2) = 
+                case (rightNeighbor s1, bottomNeighbor s2) of
+                  ([(_, c1', _)], [(_, _, r2')]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                  _                              -> False
+          rxingu ((l1,_, c1), s1) ((l2, _, c2), s2) = 
+                case (rightNeighbor s1, upNeighbor s2) of
+                  ([(_, c1', _)], [(l2', _, _)]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
+                  _                              -> False
+          bxingr ((_, r1, c1), s1) ((_, r2, c2), s2) = 
+                case (bottomNeighbor s1, rightNeighbor s2) of
+                  ([(_, _, r1')], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
+                  _                              -> False
+          bxingu ((l1, r1, _), s1) ((l2, r2, _), s2) = 
+                case (bottomNeighbor s1, upNeighbor s2) of
+                  ([(_, _, r1')], [(l2', _, _)]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
+                  _                              -> False
+          uxingb ((l1, r1, _), s1) ((l2, r2, _), s2) = 
+                case (upNeighbor s1, bottomNeighbor s2) of
                   ([(l1', _, _)], [(_,_, r2')]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
-                  _ -> False
-                ) || case (upNeighbor s1, rightNeighbor s2) of
-                     ([(l1', _, _)], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
-                     _ -> False
+                  _                             -> False
+          uxingr ((l1, _, c1), s1) ((l2, _, c2), s2) = 
+                case (upNeighbor s1, rightNeighbor s2) of
+                  ([(l1', _, _)], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
+                  _                             -> False
           
 narrow :: Set.Set Index -> State -> [State]
 narrow seed state = if Set.null seed then [state] else result
     where (i, seed') = Set.deleteFindMin seed
           island = state Map.! i
           bs = iBridges island
-          bs' = filter (noxings rightB rightXings bottomB)
-              $ filter (noxings rightB rightXings upB)
-              $ filter (noxings bottomB bottomXings rightB)
-              $ filter (noxings bottomB bottomXings upB)
-              $ filter (noxings upB upXings rightB)
-              $ filter (noxings upB upXings bottomB)
+          bs' = filter (noxings rightB rightXbottom bottomB)
+              $ filter (noxings rightB rightXup upB)
+              $ filter (noxings bottomB bottomXright rightB)
+              $ filter (noxings bottomB bottomXup upB)
+              $ filter (noxings upB upXright rightB)
+              $ filter (noxings upB upXbottom bottomB)
               $ filter (match topB topNeighbor bottomB)
               $ filter (match rightB rightNeighbor leftB)
               $ filter (match bottomB bottomNeighbor topB)
@@ -188,7 +211,10 @@ narrow seed state = if Set.null seed then [state] else result
                                                                      [topNeighbor, rightNeighbor
                                                                      , bottomNeighbor, leftNeighbor
                                                                      , upNeighbor, downNeighbor
-                                                                     , rightXings, bottomXings]
+                                                                     , rightXbottom, rightXup
+                                                                     , bottomXright, bottomXup
+                                                                     , upXright, upXbottom
+                                                                     ]
                              in narrow (Set.union seed' newSeeds)
                                        (Map.insert i (island {iBridges = bs'}) state)
           match thisB neighbor otherB b = case neighbor island of
@@ -245,7 +271,9 @@ solve'' state (i, island) = concatMap f $ iBridges island
           seed = Set.fromList $ concatMap ($island) [topNeighbor, rightNeighbor
                                                     , bottomNeighbor, leftNeighbor
                                                     , upNeighbor, downNeighbor
-                                                    , rightXings, bottomXings, upXings
+                                                    , rightXbottom, rightXup
+                                                    , bottomXright, bottomXup
+                                                    , upXright, upXbottom
                                                     ]
 
 -- EPS output ------------------------------------
