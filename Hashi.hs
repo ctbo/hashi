@@ -161,29 +161,29 @@ stateFromProblem p = state
           up     (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l+1 ..ln]]
           down   (l, r, c) = maybeToList $ find islandIndex [(ll, r, c) | ll <- [l-1, l-2 .. 0]]
           islandIndex i = isIsland (p!i)
-          rxingb ((_,r1, c1), s1) ((_, r2, c2), s2) = 
+          rxingb ((l1, r1,  c1), s1) ((l2, r2, c2), s2) = l1 == l2 &&
                 case (rightNeighbor s1, bottomNeighbor s2) of
-                  ([(_, c1', _)], [(_, _, r2')]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
+                  ([(_, _, c1')], [(_, r2', _)]) -> r2 < r1 && r1 < r2' && c1 < c2 && c2 < c1'
                   _                              -> False
-          rxingu ((l1,_, c1), s1) ((l2, _, c2), s2) = 
+          rxingu ((l1, r1, c1), s1) ((l2, r2, c2), s2) = r1 == r2 &&
                 case (rightNeighbor s1, upNeighbor s2) of
-                  ([(_, c1', _)], [(l2', _, _)]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
+                  ([(_, _, c1')], [(l2', _, _)]) -> l2 < l1 && l1 < l2' && c1 < c2 && c2 < c1'
                   _                              -> False
-          bxingr ((_, r1, c1), s1) ((_, r2, c2), s2) = 
+          bxingr ((l1, r1, c1), s1) ((l2, r2, c2), s2) = l1 == l2 &&
                 case (bottomNeighbor s1, rightNeighbor s2) of
-                  ([(_, _, r1')], [(_, c2', _)]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
+                  ([(_, r1', _)], [(_, _, c2')]) -> r1 < r2 && r2 < r1' && c2 < c1 && c1 < c2'
                   _                              -> False
-          bxingu ((l1, r1, _), s1) ((l2, r2, _), s2) = 
+          bxingu ((l1, r1, c1), s1) ((l2, r2, c2), s2) = c1 == c2 &&
                 case (bottomNeighbor s1, upNeighbor s2) of
-                  ([(_, _, r1')], [(l2', _, _)]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
+                  ([(_, r1', _)], [(l2', _, _)]) -> r1 < r2 && r2 < r1' && l2 < l1 && l1 < l2'
                   _                              -> False
-          uxingb ((l1, r1, _), s1) ((l2, r2, _), s2) = 
+          uxingb ((l1, r1, c1), s1) ((l2, r2, c2), s2) = c1 == c2 &&
                 case (upNeighbor s1, bottomNeighbor s2) of
-                  ([(l1', _, _)], [(_,_, r2')]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
+                  ([(l1', _, _)], [(_, r2', _)]) -> l1 < l2 && l2 < l1' && r2 < r1 && r1 < r2'
                   _                             -> False
-          uxingr ((l1, _, c1), s1) ((l2, _, c2), s2) = 
+          uxingr ((l1, r1, c1), s1) ((l2, r2, c2), s2) = r1 == r2 &&
                 case (upNeighbor s1, rightNeighbor s2) of
-                  ([(l1', _, _)], [(_, c2', _)]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
+                  ([(l1', _, _)], [(_, _, c2')]) -> l1 < l2 && l2 < l1' && c2 < c1 && c1 < c2'
                   _                             -> False
           
 narrow :: Set.Set Index -> State -> [State]
