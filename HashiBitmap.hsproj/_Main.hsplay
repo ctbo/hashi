@@ -1,5 +1,16 @@
 -- Haskell Playground 1.0
 fileString <- readFile "7x10easy"
 
-readProblem fileString
+let Right p = readProblem fileString
+length p
 
+
+let ci = last p
+ci
+let (bc, bv) = head $ iBridgeVectors ci
+bc
+bv
+putStrLn $ showBitvector (1,10,7) bv
+
+head $ solve p
+length $ solve p
