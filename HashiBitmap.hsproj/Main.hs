@@ -1,7 +1,38 @@
+-- Hashi.hs 
+-- a solver for Hashiwokakero puzzles
+-- Copyright (C) 2017 by Harald Bögeholz
+-- See LICENSE file for license information
+
+{-# LANGUAGE  QuasiQuotes #-}
+
 import Control.Monad
 import Data.List (elemIndex, find, foldl')
 import Data.Bits
 import Data.Maybe (fromJust)
+
+import Heredoc
+
+-- utility functions ------------
+
+bitOr :: [Bitvector] -> Bitvector
+bitOr = foldl' (.|.) 0
+
+(.+) ::(Num t) => (t, t, t) -> (t, t, t) -> (t, t, t)
+(x, y, z) .+ (x', y', z') = (x+x', y+y', z+z')
+
+(.-) ::(Num t) => (t, t, t) -> (t, t, t) -> (t, t, t)
+(x, y, z) .- (x', y', z') = (x-x', y-y', z-z')
+
+(.*) ::(Num t) => (t, t, t) -> t -> (t, t, t)
+(x, y, z) .* f = (x*f, y*f, z*f)
+
+(./) ::(Fractional t) => (t, t, t) -> t -> (t, t, t)
+(x, y, z) ./ f = (x/f, y/f, z/f)
+
+(.>=) :: (Ord t) => (t, t, t) -> (t, t, t) -> Bool
+(x, y, z) .>= (x', y', z') = x >= x' && y >= y' && z >= z'
+
+-- --------------------------------
 
 type Bitvector = Integer
 type Index = (Int, Int, Int)
@@ -45,10 +76,11 @@ readProblem s = do
                       _      -> Left $ "Invalid character: '" ++ [ch] ++ "' at layer " ++ show l ++ ", row " ++ show r ++ ", column " ++ show c
                    
 type BridgeConfig = [Int] -- number of bridges corresponding to directions
-   
+type BridgeList = [(Index, Int)] -- bridge destination and multiplicity
+
 data CompiledIsland = CompiledIsland { iIndex :: Index
                                      , iLabel :: Int
-                                     , iBridgeVectors :: [(BridgeConfig, Bitvector)]
+                                     , iBridgeVectors :: [(BridgeList, Bitvector)]
                                      , iFootprint :: Bitvector
                                      } deriving (Eq, Show)
 
@@ -69,7 +101,12 @@ compileProblem rawIslands = map compileIsland rawIslands
           where neighbors = map (closestNeighbor islandIndices diameter i) directions
                 bcs = bridgeConfigurations neighbors nbridges
                 bvs = map f bcs
-                f bc = (bc, bc2bv bc)
+                f bc = (bc2bl bc, bc2bv bc)
+                bc2bl :: BridgeConfig -> BridgeList
+                bc2bl = concat . zipWith g neighbors
+                g Nothing _ = []
+                g (Just _) 0 = []
+                g (Just i) n = [(i, n)]
                 bc2bv bc = shift (bridges2bits bc) (bridgeBitsOffset i)    -- our bridges
                        .|. bitOr (zipWith3 other bc neighbors [3,4,5,0,1,2]) -- block non-matching neighbors
                        .|. bitOr (zipWith3 drawBridge bc neighbors pdirections)
@@ -98,7 +135,7 @@ bridges2bits (b:bs) = shift (bridges2bits bs) 3 .|. shift 1 b
 
 data SolvedIsland = SolvedIsland { sIndex :: Index
                                  , sLabel :: Int
-                                 , sBridgeConfig :: BridgeConfig
+                                 , sBridgeList :: BridgeList
                                  } deriving (Eq, Show)
 
 type Solution = [SolvedIsland]
@@ -137,17 +174,89 @@ showBitvector (bbl, bbr, bbc) b = field ++ showIslands 0 (shiftR b (bbl*bbr*bbc)
         showIslands'' b d i = if testBit b (d*3+i) then show i else "."
 
 
--- misc trivial utility stuff ------------
+-- X3D/HTML output ------------------------------
 
-bitOr :: [Bitvector] -> Bitvector
-bitOr = foldl' (.|.) 0
+type X3dVec3d = (Float, Float, Float)
 
-(.+) ::(Num t) => (t, t, t) -> (t, t, t) -> (t, t, t)
-(x, y, z) .+ (x', y', z') = (x+x', y+y', z+z')
+x3dxform :: Index -> X3dVec3d
+x3dxform (l, r, c) = (3.0 * fromIntegral c, -3.0 * fromIntegral r, 3.0 * fromIntegral l)
 
-(.-) ::(Num t) => (t, t, t) -> (t, t, t) -> (t, t, t)
-(x, y, z) .- (x', y', z') = (x-x', y-y', z-z')
+x3dshowVec3d :: X3dVec3d -> String
+x3dshowVec3d (x, y, z) = "\"" ++ show x ++ " " ++ show y ++ " " ++ show z ++ "\""
 
-(.*) ::(Num t) => (t, t, t) -> t -> (t, t, t)
-(x, y, z) .* f = (x*f, y*f, z*f)
+x3dshowindex :: Index -> String
+x3dshowindex = x3dshowVec3d . x3dxform
 
+x3dshowText :: Index -> String -> String
+x3dshowText i t  =  "<transform translation=" ++ x3dshowindex i ++ ">\n"
+                ++ "  <shape>\n"
+                ++ "    <appearance><material diffuseColor=\"0 0 1\"></material></appearance>\n"
+                ++ "    <text string=\"" ++ t ++ "\" solid=\"false\" />\n"
+                ++ "  </shape>\n"
+                ++ "</transform>\n"
+
+x3drotRight :: String
+x3drotRight = "0 0 1 1.5707963"
+
+x3drotBottom :: String
+x3drotBottom = "0 0 1 0"
+
+x3drotUp :: String
+x3drotUp = "1 0 0 1.5707963"
+ 
+x3dShowCylinder :: X3dVec3d -> X3dVec3d -> String -> String
+x3dShowCylinder center scale rotation
+    = "<transform translation=" ++ x3dshowVec3d center
+       ++ " scale="++ x3dshowVec3d scale 
+       ++ " rotation=\"" ++ rotation ++ "\">\n"
+   ++ "  <shape> \n"
+   ++ "    <appearance><material diffuseColor=\".5 .5 .5\"></material></appearance> \n"
+   ++ "    <cylinder/>\n"
+   ++ "  </shape> \n"
+   ++ "</transform>\n"
+
+x3dshowRightBridge :: Index -> Index -> Int -> String
+x3dshowRightBridge i@(_,_,ci) j@(_,_,cj) n = 
+      case n of
+           1 -> x3dShowCylinder center scale x3drotRight
+           2 -> x3dShowCylinder (center .+ (0,  0.15, 0)) scale x3drotRight
+             ++ x3dShowCylinder (center .+ (0, -0.15, 0)) scale x3drotRight
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (cj-ci) - 0.7, 0.1)
+
+x3dshowBottomBridge :: Index -> Index -> Int -> String
+x3dshowBottomBridge i@(_,ri,_) j@(_,rj,_) n = 
+      case n of
+           1 -> x3dShowCylinder center scale x3drotBottom
+           2 -> x3dShowCylinder (center .+ ( 0.15, 0, 0)) scale x3drotBottom
+             ++ x3dShowCylinder (center .+ (-0.15, 0, 0)) scale x3drotBottom
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (rj-ri) - 0.7, 0.1)
+
+x3dshowUpBridge :: Index -> Index -> Int -> String
+x3dshowUpBridge i@(li,_,_) j@(lj,_,_) n = 
+      case n of
+           1 -> x3dShowCylinder center scale x3drotUp
+           2 -> x3dShowCylinder (center .+ (0,  0.15, 0)) scale x3drotUp
+             ++ x3dShowCylinder (center .+ (0, -0.15, 0)) scale x3drotUp
+           _ -> ""
+    where center = (x3dxform i .+ x3dxform j) ./ 2
+          scale = (0.1, 1.5 * fromIntegral (lj-li) - 0.5, 0.1)
+
+x3dshowBridge :: Index -> Index -> Int -> String
+x3dshowBridge i j n = if c /= 0 then x3dshowRightBridge i j n
+                      else if r /= 0 then x3dshowBottomBridge i j n
+                      else x3dshowUpBridge i j n
+  where (_,r,c) = j .- i
+
+x3dshowSolution :: Solution -> String
+x3dshowSolution sis = [fileAsString|hashiheader.html|]
+                   ++ concatMap island sis
+                   ++ [fileAsString|hashifooter.html|]
+  where island si = x3dshowText (sIndex si) (show (sLabel si))
+                 ++ concatMap (bridge (sIndex si)) (sBridgeList si)
+        bridge i (j, n) = if j .>= i
+                          then x3dshowBridge i j n
+                          else []

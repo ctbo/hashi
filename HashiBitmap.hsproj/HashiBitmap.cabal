@@ -10,4 +10,7 @@ Executable HashiBitmap
   main-is: Main.hs
   buildable: True
   build-depends:
-      base -any
+      base -any,
+      template-haskell -any
+  other-modules:
+      Heredoc
