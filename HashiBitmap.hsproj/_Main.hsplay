@@ -6,4 +6,6 @@ length p
 
 let sol = head $ solve p
 
+-- writeFile "out.html" $ x3dshowSolution sol
+
 

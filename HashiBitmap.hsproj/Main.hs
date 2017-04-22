@@ -5,6 +5,7 @@
 
 {-# LANGUAGE  QuasiQuotes #-}
 
+import System.Environment
 import Control.Monad
 import Data.List (elemIndex, find, foldl')
 import Data.Bits
@@ -260,3 +261,25 @@ x3dshowSolution sis = [fileAsString|hashiheader.html|]
         bridge i (j, n) = if j .>= i
                           then x3dshowBridge i j n
                           else []
+
+
+main :: IO ()
+main = do
+     args <- getArgs
+     case args of
+          [filename] -> do
+                     s <- readFile filename
+                     work s filename
+          [] -> error "Usage: solve filename\nWill write solution to filename.solution.html"
+          _  -> error "Too many arguments."
+  where work s basename = case readProblem s of
+             Left e -> putStrLn e
+             Right p -> do
+                   let filename = basename ++ ".solution.html"
+                   putStrLn $ "Will write first solution to '" ++ filename ++ "'."
+                   let solutions = solve p
+                   when (not (null solutions)) $ do
+                        writeFile filename $ x3dshowSolution $ head solutions
+                        putStrLn $ "Wrote '" ++ filename ++ "'."
+                        putStrLn "Counting all solutions ..."
+                   putStrLn $ "Total number of solutions: " ++ show (length solutions)
