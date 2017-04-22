@@ -7,7 +7,7 @@
 
 import System.Environment
 import Control.Monad
-import Data.List (elemIndex, find, foldl')
+import Data.List (elemIndex, find, foldl', tails, delete)
 import Data.Bits
 import Data.Maybe (fromJust)
 
@@ -32,6 +32,10 @@ bitOr = foldl' (.|.) 0
 
 (.>=) :: (Ord t) => (t, t, t) -> (t, t, t) -> Bool
 (x, y, z) .>= (x', y', z') = x >= x' && y >= y' && z >= z'
+
+argmax :: (Ord b) => (a -> b) -> [a] -> a
+argmax f (x:xs) = fst $ foldr step (x, f x) xs
+  where step a' (a, b) = if f a' > b then (a', f a') else (a, b)
 
 -- --------------------------------
 
@@ -137,6 +141,24 @@ bridges2bits :: [Int] -> Bitvector
 bridges2bits [] = 0
 bridges2bits (b:bs) = shift (bridges2bits bs) 3 .|. shift 1 b
 
+
+heuristicSort :: Problem -> Problem
+heuristicSort [] = []
+heuristicSort [c] = [c]
+heuristicSort cs = bestStart : heuristicSort' (iFootprint bestStart) rest
+  where allPairs = [(x, y) | t <- tails cs, not (null t), let x = head t
+                           , y <- tail t]
+        overlap (x, y) = popCount $ iFootprint x .&. iFootprint y
+        bestPair = argmax overlap allPairs
+        bestStart = argmax (popCount . iFootprint) [fst bestPair, snd bestPair]
+        rest = delete bestStart cs
+        heuristicSort' :: Bitvector -> Problem -> Problem
+        heuristicSort' bv [] = []
+        heuristicSort' bv cs = best : heuristicSort' bv' (delete best cs)
+          where best = argmax (\c -> popCount (bv .&. iFootprint c)) cs
+                bv' = bv .|. iFootprint best
+        
+
 -- connected components ------------------------------
 
 ccUpdate :: [Bitvector] -> Bitvector -> [Bitvector]
@@ -156,7 +178,7 @@ data SolvedIsland = SolvedIsland { sIndex :: Index
 type Solution = [SolvedIsland]
 
 solve :: Problem -> [Solution]
-solve = solve' 0 [] []
+solve = solve' 0 [] [] . heuristicSort
 
 solve' :: Bitvector -> [Bitvector] -> Solution -> Problem -> [Solution]
 solve' _ _ sis [] = [sis]

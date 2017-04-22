@@ -1,14 +1,7 @@
 -- Haskell Playground 1.0
-fileString <- readFile "puzzles/1x2x2"
+fileString <- readFile "puzzles/1x10x7"
 
 let Right p = readProblem fileString
 length p
 
-let solutions = solve p
-length solutions
-
-let sol = head $ solve p
-sol
-
-putStr $ showBitvector (1,2,2) $ sBV (sol!!1)
-
+length $ map iIndex $ heuristicSort p
