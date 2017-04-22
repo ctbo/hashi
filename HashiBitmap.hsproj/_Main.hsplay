@@ -1,11 +1,14 @@
 -- Haskell Playground 1.0
-fileString <- readFile "7x10easy"
+fileString <- readFile "puzzles/1x10x7"
 
 let Right p = readProblem fileString
 length p
 
 let sol = head $ solve p
 
--- writeFile "out.html" $ x3dshowSolution sol
+let g = solution2graph sol
+g
+
+length $ connectedComponent g (0,0,0)
 
 

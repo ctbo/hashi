@@ -10,6 +10,7 @@ import Control.Monad
 import Data.List (elemIndex, find, foldl')
 import Data.Bits
 import Data.Maybe (fromJust)
+import qualified Data.Map.Strict as M
 
 import Heredoc
 
@@ -135,7 +136,22 @@ bridges2bits :: [Int] -> Bitvector
 bridges2bits [] = 0
 bridges2bits (b:bs) = shift (bridges2bits bs) 3 .|. shift 1 b
 
+-- connected components ------------------------------
 
+type Graph = M.Map Index [Index]
+
+solution2graph :: Solution -> Graph
+solution2graph = M.fromList . map f
+  where f si = (sIndex si, map fst (sBridgeList si))
+
+connectedComponent :: Graph -> Index -> [Index]
+connectedComponent g i = cc g [i]
+  where cc _ [] = []
+        cc g (i:is) = case M.lookup i g of
+                        Nothing -> cc g is
+                        Just js -> i : cc (M.delete i g) (js ++ is)
+
+-- solve ------------------------------
 
 data SolvedIsland = SolvedIsland { sIndex :: Index
                                  , sLabel :: Int
@@ -265,6 +281,7 @@ x3dshowSolution sis = [fileAsString|hashiheader.html|]
                           then x3dshowBridge i j n
                           else []
 
+-- main ------------------------------
 
 main :: IO ()
 main = do

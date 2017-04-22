@@ -11,6 +11,7 @@ Executable HashiBitmap
   buildable: True
   build-depends:
       base -any,
+      containers -any,
       template-haskell -any
   other-modules:
       Heredoc
