@@ -74,7 +74,10 @@ readProblem s = do
             '.'  -> Right ((l, r, c+1), islands)
             _    -> case elemIndex ch ".123456789abc" of
                       Just n -> Right ((l, r, c+1), (idx,n):islands)
-                      _      -> Left $ "Invalid character: '" ++ [ch] ++ "' at layer " ++ show l ++ ", row " ++ show r ++ ", column " ++ show c
+                      _      -> Left $ "Invalid character: '" ++ [ch] 
+                                    ++ "' at layer " ++ show l 
+                                    ++ ", row " ++ show r 
+                                    ++ ", column " ++ show c
                    
 type BridgeConfig = [Int] -- number of bridges corresponding to directions
 type BridgeList = [(Index, Int)] -- bridge destination and multiplicity
