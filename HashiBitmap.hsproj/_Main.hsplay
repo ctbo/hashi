@@ -1,14 +1,15 @@
 -- Haskell Playground 1.0
-fileString <- readFile "puzzles/1x10x7"
+fileString <- readFile "puzzles/1x2x2"
 
 let Right p = readProblem fileString
 length p
 
+let solutions = solve p
+length solutions
+
 let sol = head $ solve p
+sol
 
-let g = solution2graph sol
-g
-
-length $ connectedComponent g (0,0,0)
+putStr $ showBitvector (1,2,2) $ sBV (sol!!1)
 
 

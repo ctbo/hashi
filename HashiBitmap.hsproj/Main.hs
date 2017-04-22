@@ -115,6 +115,7 @@ compileProblem rawIslands = map compileIsland rawIslands
                 bc2bv bc = shift (bridges2bits bc) (bridgeBitsOffset i)    -- our bridges
                        .|. bitOr (zipWith3 other bc neighbors [3,4,5,0,1,2]) -- block non-matching neighbors
                        .|. bitOr (zipWith3 drawBridge bc neighbors pdirections)
+                       .|. idxbit i
                 other :: Int -> Maybe Index -> Int -> Bitvector
                 other b n d = case n of
                                 Nothing -> 0
@@ -123,7 +124,7 @@ compileProblem rawIslands = map compileIsland rawIslands
                   | b == 0 = 0
                   | otherwise = case n of
                                    Nothing -> 0 -- can't happen
-                                   Just ni -> bitOr $ map idxbit $ takeWhile (/= ni) [i .+ (d .* k) | k <- [0..]]
+                                   Just ni -> bitOr $ map idxbit $ takeWhile (/= ni) [i .+ (d .* k) | k <- [1..]]
                 idxbit (l, r, c) = shift 1 $ (l*bbr+r)*bbc + c
 
 bridgeConfigurations :: [Maybe t] -> Int -> [BridgeConfig]
@@ -156,6 +157,7 @@ connectedComponent g i = cc g [i]
 data SolvedIsland = SolvedIsland { sIndex :: Index
                                  , sLabel :: Int
                                  , sBridgeList :: BridgeList
+                                 , sBV :: Bitvector
                                  } deriving (Eq, Show)
 
 type Solution = [SolvedIsland]
@@ -167,7 +169,7 @@ solve' :: Bitvector -> Solution -> Problem -> [Solution]
 solve' _ sis [] = [sis]
 solve' b sis (ci:cis) = concatMap recurse next
   where step (bc, bv) = if b .&. bv == 0
-                        then [(b .|. bv, SolvedIsland (iIndex ci) (iLabel ci) bc)]
+                        then [(b .|. bv, SolvedIsland (iIndex ci) (iLabel ci) bc (b.|.bv))]
                         else []
         next :: [(Bitvector, SolvedIsland)]
         next = concatMap step (iBridgeVectors ci)

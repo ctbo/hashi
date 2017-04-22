@@ -2,4 +2,5 @@ solve
 *dyn_*
 *.o
 *.hi
+*.solution.*
 .DS_Store
