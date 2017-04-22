@@ -4,6 +4,9 @@ cabal-version: 1.11
 build-type: Simple
 license: AllRightsReserved
 stability: experimental
+data-files:
+    hashifooter.html
+    hashiheader.html
 x-ghc-framework-version: 7.10.3-6.29-1
 x-last-ide-version: HfM1.4.0
 Executable HashiBitmap
@@ -11,7 +14,6 @@ Executable HashiBitmap
   buildable: True
   build-depends:
       base -any,
-      containers -any,
-      template-haskell -any
+      containers -any
   other-modules:
       Heredoc
