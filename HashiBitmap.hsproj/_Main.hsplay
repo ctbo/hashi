@@ -12,4 +12,3 @@ sol
 
 putStr $ showBitvector (1,2,2) $ sBV (sol!!1)
 
-

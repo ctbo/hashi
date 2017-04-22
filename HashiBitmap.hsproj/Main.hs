@@ -10,7 +10,6 @@ import Control.Monad
 import Data.List (elemIndex, find, foldl')
 import Data.Bits
 import Data.Maybe (fromJust)
-import qualified Data.Map.Strict as M
 
 import Heredoc
 
@@ -85,7 +84,7 @@ type BridgeList = [(Index, Int)] -- bridge destination and multiplicity
 
 data CompiledIsland = CompiledIsland { iIndex :: Index
                                      , iLabel :: Int
-                                     , iBridgeVectors :: [(BridgeList, Bitvector)]
+                                     , iBridgeVectors :: [(BridgeList, Bitvector, Bitvector)]
                                      , iFootprint :: Bitvector
                                      } deriving (Eq, Show)
 
@@ -101,12 +100,12 @@ compileProblem rawIslands = map compileIsland rawIslands
         compileIsland (i, nbridges) = CompiledIsland { iIndex = i
                                                      , iLabel = nbridges
                                                      , iBridgeVectors = bvs
-                                                     , iFootprint = bitOr $ map snd bvs
+                                                     , iFootprint = bitOr $ map (\(_,x,_)->x) bvs
                                                      }
           where neighbors = map (closestNeighbor islandIndices diameter i) directions
                 bcs = bridgeConfigurations neighbors nbridges
                 bvs = map f bcs
-                f bc = (bc2bl bc, bc2bv bc)
+                f bc = (bc2bl bc, bc2bv bc, bc2bv2 bc)
                 bc2bl :: BridgeConfig -> BridgeList
                 bc2bl = concat . zipWith g neighbors
                 g Nothing _ = []
@@ -126,6 +125,7 @@ compileProblem rawIslands = map compileIsland rawIslands
                                    Nothing -> 0 -- can't happen
                                    Just ni -> bitOr $ map idxbit $ takeWhile (/= ni) [i .+ (d .* k) | k <- [1..]]
                 idxbit (l, r, c) = shift 1 $ (l*bbr+r)*bbc + c
+                bc2bv2 bc = bitOr $ idxbit i : map (idxbit.fst) (bc2bl bc)
 
 bridgeConfigurations :: [Maybe t] -> Int -> [BridgeConfig]
 bridgeConfigurations [] 0 = [[]]
@@ -139,18 +139,11 @@ bridges2bits (b:bs) = shift (bridges2bits bs) 3 .|. shift 1 b
 
 -- connected components ------------------------------
 
-type Graph = M.Map Index [Index]
-
-solution2graph :: Solution -> Graph
-solution2graph = M.fromList . map f
-  where f si = (sIndex si, map fst (sBridgeList si))
-
-connectedComponent :: Graph -> Index -> [Index]
-connectedComponent g i = cc g [i]
-  where cc _ [] = []
-        cc g (i:is) = case M.lookup i g of
-                        Nothing -> cc g is
-                        Just js -> i : cc (M.delete i g) (js ++ is)
+ccUpdate :: [Bitvector] -> Bitvector -> [Bitvector]
+ccUpdate cc c = foldr f [c] cc
+  where f y (x:xs) = if x .&. y /= 0
+                     then (x .|. y):xs
+                     else x:y:xs
 
 -- solve ------------------------------
 
@@ -163,19 +156,21 @@ data SolvedIsland = SolvedIsland { sIndex :: Index
 type Solution = [SolvedIsland]
 
 solve :: Problem -> [Solution]
-solve = solve' 0 []
+solve = solve' 0 [] []
 
-solve' :: Bitvector -> Solution -> Problem -> [Solution]
-solve' _ sis [] = [sis]
-solve' b sis (ci:cis) = concatMap recurse next
-  where step (bc, bv) = if b .&. bv == 0
-                        then [(b .|. bv, SolvedIsland (iIndex ci) (iLabel ci) bc (b.|.bv))]
-                        else []
-        next :: [(Bitvector, SolvedIsland)]
+solve' :: Bitvector -> [Bitvector] -> Solution -> Problem -> [Solution]
+solve' _ _ sis [] = [sis]
+solve' b cc sis (ci:cis) = concatMap recurse next
+  where step (bc, bv, bv2) = if b .&. bv == 0 && (null cis || not blocked)
+                           then [(b', cc', SolvedIsland (iIndex ci) (iLabel ci) bc (b.|.bv))]
+                           else []
+           where b' = b .|. bv
+                 cc' = ccUpdate cc bv2
+                 blocked = head cc' .&. b' == head cc'
+        next :: [(Bitvector, [Bitvector], SolvedIsland)]
         next = concatMap step (iBridgeVectors ci)
-        recurse :: (Bitvector, SolvedIsland) -> [Solution]
-        recurse (b', si) = solve' b' (si:sis) cis
-
+        recurse :: (Bitvector, [Bitvector], SolvedIsland) -> [Solution]
+        recurse (b', cc', si) = solve' b' cc' (si:sis) cis
 
 -- debugging helper ---------------------
 
