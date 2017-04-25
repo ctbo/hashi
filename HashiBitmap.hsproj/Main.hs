@@ -18,6 +18,9 @@ import Heredoc
 bitOr :: [Bitvector] -> Bitvector
 bitOr = foldl' (.|.) 0
 
+bitAnd :: [Bitvector] -> Bitvector
+bitAnd = foldl' (.&.) (-1)
+
 (.+) ::(Num t) => (t, t, t) -> (t, t, t) -> (t, t, t)
 (x, y, z) .+ (x', y', z') = (x+x', y+y', z+z')
 
@@ -36,6 +39,9 @@ bitOr = foldl' (.|.) 0
 argmax :: (Ord b) => (a -> b) -> [a] -> a
 argmax f (x:xs) = fst $ foldr step (x, f x) xs
   where step a' (a, b) = if f a' > b then (a', f a') else (a, b)
+
+sndOf3 :: (a, b, c) -> b
+sndOf3 (_, x, _) = x
 
 -- --------------------------------
 
@@ -104,7 +110,7 @@ compileProblem rawIslands = map compileIsland rawIslands
         compileIsland (i, nbridges) = CompiledIsland { iIndex = i
                                                      , iLabel = nbridges
                                                      , iBridgeVectors = bvs
-                                                     , iFootprint = bitOr $ map (\(_,x,_)->x) bvs
+                                                     , iFootprint = bitOr $ map sndOf3 bvs
                                                      }
           where neighbors = map (closestNeighbor islandIndices diameter i) directions
                 bcs = bridgeConfigurations neighbors nbridges
@@ -158,7 +164,24 @@ heuristicSort cs = bestStart : heuristicSort' (iFootprint bestStart) rest
           where best = argmax (\c -> popCount (bv .&. iFootprint c)) cs
                 bv' = bv .|. iFootprint best
         
+-- narrow -------------------------------------------
 
+narrowDown :: Problem -> Problem
+narrowDown p = if p' /= p then narrowDown p' else p
+  where p' = narrow p
+
+narrow :: Problem -> Problem
+narrow cis = narrow' cis and1s 0
+  where and1s = map bvAnd cis
+        bvAnd ci = bitAnd $ map sndOf3 $ iBridgeVectors ci
+
+narrow' :: Problem -> [Bitvector] -> Bitvector -> Problem
+narrow' [] _ _ = []
+narrow' (ci:cis) (and1:and1s) and2 = ci {iBridgeVectors = bvLegal} : narrow' cis and1s (and2 .|. bvAnd)
+    where constraint = bitOr and1s .|. and2
+          bvLegal = filter (\(_,b,_) -> b .&. constraint == 0) $ iBridgeVectors ci
+          bvAnd = bitAnd $ map sndOf3 bvLegal
+          
 -- connected components ------------------------------
 
 ccUpdate :: [Bitvector] -> Bitvector -> [Bitvector]

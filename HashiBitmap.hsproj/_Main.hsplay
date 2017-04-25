@@ -1,7 +1,15 @@
 -- Haskell Playground 1.0
-fileString <- readFile "puzzles/1x10x7"
+fileString <- readFile "puzzles/2x10x7"
 
-let Right p = readProblem fileString
+let Right q = readProblem fileString
+
+let p = heuristicSort q
+
 length p
 
-length $ map iIndex $ heuristicSort p
+
+let p' = narrowDown p
+
+
+map (length . iBridgeVectors) p
+map (length . iBridgeVectors) p'
