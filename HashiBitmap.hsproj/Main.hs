@@ -7,7 +7,7 @@
 
 import System.Environment
 import Control.Monad
-import Data.List (elemIndex, find, foldl', tails, delete)
+import Data.List (elemIndex, find, foldl', tails, delete, partition)
 import Data.Bits
 import Data.Maybe (fromJust)
 
@@ -40,8 +40,14 @@ argmax :: (Ord b) => (a -> b) -> [a] -> a
 argmax f (x:xs) = fst $ foldr step (x, f x) xs
   where step a' (a, b) = if f a' > b then (a', f a') else (a, b)
 
+fstOf3 :: (a, b, c) -> a
+fstOf3 (x, _, _) = x
+
 sndOf3 :: (a, b, c) -> b
 sndOf3 (_, x, _) = x
+
+lengthLT :: Int -> [a] -> Bool
+lengthLT n xs = length (take n xs) < n
 
 -- --------------------------------
 
@@ -72,6 +78,19 @@ closestNeighbor islands m i0 di = find isIsland [i0 .+ (di.*f) | f <- [1..m]]
 maxIndex :: [Index] -> Index
 maxIndex = foldr1 (\(x,y,z) (x',y',z') -> (max x x', max y y', max z z'))
 
+type BridgeConfig = [Int] -- number of bridges corresponding to directions
+type BridgeList = [(Index, Int)] -- bridge destination and multiplicity
+
+data CompiledIsland = CompiledIsland { iIndex :: Index
+                                     , iLabel :: Int
+                                     , iBridgeVectors :: [(BridgeList, Bitvector, Bitvector)]
+                                     , iFootprint :: Bitvector
+                                     } deriving (Eq, Show)
+
+type Problem = [CompiledIsland] 
+-- a solution differs from a problem only in that all iBridgeVectors have exactly one element   
+type Solution = [CompiledIsland]
+               
 readProblem :: String -> Either String Problem
 readProblem s = do
     (_, islands) <- foldM collect ((0,0,0), []) s
@@ -89,17 +108,6 @@ readProblem s = do
                                     ++ ", row " ++ show r 
                                     ++ ", column " ++ show c
                    
-type BridgeConfig = [Int] -- number of bridges corresponding to directions
-type BridgeList = [(Index, Int)] -- bridge destination and multiplicity
-
-data CompiledIsland = CompiledIsland { iIndex :: Index
-                                     , iLabel :: Int
-                                     , iBridgeVectors :: [(BridgeList, Bitvector, Bitvector)]
-                                     , iFootprint :: Bitvector
-                                     } deriving (Eq, Show)
-
-type Problem = [CompiledIsland]    
-               
 compileProblem :: [(Index, Int)] -> Problem
 compileProblem rawIslands = map compileIsland rawIslands
   where islandIndices = map fst rawIslands
@@ -166,12 +174,12 @@ heuristicSort cs = bestStart : heuristicSort' (iFootprint bestStart) rest
         
 -- narrow -------------------------------------------
 
-narrowDown :: Problem -> Problem
-narrowDown p = if p' /= p then narrowDown p' else p
-  where p' = narrow p
+narrowDown :: Bitvector -> Problem -> Problem
+narrowDown bv p = if p' /= p then narrowDown bv p' else p
+  where p' = narrow bv p
 
-narrow :: Problem -> Problem
-narrow cis = narrow' cis and1s 0
+narrow :: Bitvector -> Problem -> Problem
+narrow and2 cis = narrow' cis and1s and2
   where and1s = map bvAnd cis
         bvAnd ci = bitAnd $ map sndOf3 $ iBridgeVectors ci
 
@@ -192,30 +200,35 @@ ccUpdate cc c = foldr f [c] cc
 
 -- solve ------------------------------
 
-data SolvedIsland = SolvedIsland { sIndex :: Index
-                                 , sLabel :: Int
-                                 , sBridgeList :: BridgeList
-                                 , sBV :: Bitvector
-                                 } deriving (Eq, Show)
-
-type Solution = [SolvedIsland]
+data State = State { stBV :: Bitvector      -- fixed islands
+                   , stCC :: [Bitvector]    -- connected components
+                   , stSolution :: Solution -- partial solution
+                   }
 
 solve :: Problem -> [Solution]
-solve = solve' 0 [] [] . heuristicSort
+solve p = map stSolution $ solve' (State 0 [] []) $ heuristicSort p
 
-solve' :: Bitvector -> [Bitvector] -> Solution -> Problem -> [Solution]
-solve' _ _ sis [] = [sis]
-solve' b cc sis (ci:cis) = concatMap recurse next
-  where step (bc, bv, bv2) = if b .&. bv == 0 && (null cis || not blocked)
-                           then [(b', cc', SolvedIsland (iIndex ci) (iLabel ci) bc (b.|.bv))]
-                           else []
-           where b' = b .|. bv
-                 cc' = ccUpdate cc bv2
-                 blocked = head cc' .&. b' == head cc'
-        next :: [(Bitvector, [Bitvector], SolvedIsland)]
-        next = concatMap step (iBridgeVectors ci)
-        recurse :: (Bitvector, [Bitvector], SolvedIsland) -> [Solution]
-        recurse (b', cc', si) = solve' b' cc' (si:sis) cis
+solve' :: State -> Problem -> [State]
+solve' state [] = if length (stCC state) == 1 then [state] else []
+solve' state p = if blocked then [] else concatMap next fixedStates
+  where blocked = any (\cc -> cc .&. stBV state == cc) $ stCC state
+        p' = narrowDown (stBV state) p
+        (fixed, open) = partition (lengthLT 2 . iBridgeVectors) p'
+        fixedStates = foldM integrate state fixed
+        next s = case open of
+                   [] -> solve' s []
+                   (ci:cis) -> concatMap (flip solve' cis) $ integrate s ci
+        
+integrate :: State -> CompiledIsland -> [State]
+integrate state ci = concatMap f $ iBridgeVectors ci
+  where f bridges@(_, bv, bv2) = if stBV state .&. bv == 0
+                                  then [ State { stBV = stBV state .|. bv
+                                               , stCC = ccUpdate (stCC state) bv2
+                                               , stSolution = ci { iBridgeVectors = [bridges] } 
+                                                            : stSolution state
+                                               }
+                                       ]
+                                  else []
 
 -- debugging helper ---------------------
 
@@ -314,11 +327,11 @@ x3dshowBridge i j n = if c /= 0 then x3dshowRightBridge i j n
   where (_,r,c) = j .- i
 
 x3dshowSolution :: Solution -> String
-x3dshowSolution sis = [fileAsString|hashiheader.html|]
-                   ++ concatMap island sis
+x3dshowSolution cis = [fileAsString|hashiheader.html|]
+                   ++ concatMap island cis
                    ++ [fileAsString|hashifooter.html|]
-  where island si = x3dshowText (sIndex si) (show (sLabel si))
-                 ++ concatMap (bridge (sIndex si)) (sBridgeList si)
+  where island ci = x3dshowText (iIndex ci) (show (iLabel ci))
+                 ++ concatMap (bridge (iIndex ci)) (fstOf3 (head (iBridgeVectors ci)))
         bridge i (j, n) = if j .>= i
                           then x3dshowBridge i j n
                           else []
