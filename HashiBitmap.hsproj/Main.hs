@@ -10,6 +10,7 @@ import Control.Monad
 import Data.List (elemIndex, find, foldl', delete, partition)
 import Data.Bits
 import Data.Maybe (fromJust)
+import Control.Parallel.Strategies
 
 import Heredoc
 
@@ -197,20 +198,22 @@ data State = State { stBV :: Bitvector      -- fixed islands
                    }
 
 solve :: Problem -> [Solution]
-solve p = map stSolution $ solve' (State 0 [] []) p
+solve p = map stSolution $ solve' 0 (State 0 [] []) p
 
-solve' :: State -> Problem -> [State]
-solve' state [] = if length (stCC state) == 1 then [state] else []
-solve' state p = if blocked then [] else concatMap next fixedStates
+solve' :: Int -> State -> Problem -> [State]
+solve' _ state [] = if length (stCC state) == 1 then [state] else []
+solve' level state p = if blocked then [] else concatMap next fixedStates
   where blocked = any (\cc -> cc .&. stBV state == cc) $ stCC state
         p' = narrowDown (stBV state) p
         (fixed, open) = partition (lengthLT 2 . iBridgeVectors) p'
         fixedStates = foldM integrate state fixed
         next s = case open of
-                   [] -> solve' s []
-                   cis -> concatMap (flip solve' rest) $ integrate s smallest
+                   [] -> solve' level s []
+                   cis -> concat $ maybeParallelMap recurse $ integrate s smallest
                         where smallest = argmin (length . iBridgeVectors) cis
                               rest = delete smallest cis
+                              recurse s' = solve' (level+1) s' rest
+                              maybeParallelMap = parMap rseq -- if level < 10 then parMap rseq else map
                               
 integrate :: State -> CompiledIsland -> [State]
 integrate state ci = concatMap f $ iBridgeVectors ci
