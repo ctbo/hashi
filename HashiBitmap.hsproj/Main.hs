@@ -7,7 +7,7 @@
 
 import System.Environment
 import Control.Monad
-import Data.List (elemIndex, find, foldl', tails, delete, partition)
+import Data.List (elemIndex, find, foldl', delete, partition)
 import Data.Bits
 import Data.Maybe (fromJust)
 
@@ -40,6 +40,11 @@ argmax :: (Ord b) => (a -> b) -> [a] -> a
 argmax _ [] = error "argmax on empty list"
 argmax f (x:xs) = fst $ foldr step (x, f x) xs
   where step a' (a, b) = if f a' > b then (a', f a') else (a, b)
+
+argmin :: (Ord b) => (a -> b) -> [a] -> a
+argmin _ [] = error "argmin on empty list"
+argmin f (x:xs) = fst $ foldr step (x, f x) xs
+  where step a' (a, b) = if f a' < b then (a', f a') else (a, b)
 
 fstOf3 :: (a, b, c) -> a
 fstOf3 (x, _, _) = x
@@ -155,24 +160,6 @@ bridgeConfigurations (_:bs) n =  concatMap (\i -> map (i:) $ bridgeConfiguration
 bridges2bits :: [Int] -> Bitvector
 bridges2bits [] = 0
 bridges2bits (b:bs) = shift (bridges2bits bs) 3 .|. shift 1 b
-
-
-heuristicSort :: Problem -> Problem
-heuristicSort [] = []
-heuristicSort [c] = [c]
-heuristicSort cs = bestStart : heuristicSort' (iFootprint bestStart) rest
-  where allPairs = [(x, y) | t <- tails cs, not (null t), let x = head t
-                           , y <- tail t]
-        overlap (x, y) = popCount $ iFootprint x .&. iFootprint y
-        bestPair = argmax overlap allPairs
-        bestStart = argmax (popCount . iFootprint) [fst bestPair, snd bestPair]
-        rest = delete bestStart cs
-
-heuristicSort' :: Bitvector -> Problem -> Problem
-heuristicSort' _ [] = []
-heuristicSort' bv cs = best : heuristicSort' bv' (delete best cs)
-  where best = argmax (\c -> popCount (bv .&. iFootprint c)) cs
-        bv' = bv .|. iFootprint best
         
 -- narrow -------------------------------------------
 
@@ -210,7 +197,7 @@ data State = State { stBV :: Bitvector      -- fixed islands
                    }
 
 solve :: Problem -> [Solution]
-solve p = map stSolution $ solve' (State 0 [] []) $ heuristicSort p
+solve p = map stSolution $ solve' (State 0 [] []) p
 
 solve' :: State -> Problem -> [State]
 solve' state [] = if length (stCC state) == 1 then [state] else []
@@ -221,8 +208,10 @@ solve' state p = if blocked then [] else concatMap next fixedStates
         fixedStates = foldM integrate state fixed
         next s = case open of
                    [] -> solve' s []
-                   (ci:cis) -> concatMap (flip solve' cis) $ integrate s ci
-        
+                   cis -> concatMap (flip solve' rest) $ integrate s smallest
+                        where smallest = argmin (length . iBridgeVectors) cis
+                              rest = delete smallest cis
+                              
 integrate :: State -> CompiledIsland -> [State]
 integrate state ci = concatMap f $ iBridgeVectors ci
   where f bridges@(_, bv, bv2) = if stBV state .&. bv == 0
