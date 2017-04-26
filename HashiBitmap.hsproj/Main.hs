@@ -37,6 +37,7 @@ bitAnd = foldl' (.&.) (-1)
 (x, y, z) .>= (x', y', z') = x >= x' && y >= y' && z >= z'
 
 argmax :: (Ord b) => (a -> b) -> [a] -> a
+argmax _ [] = error "argmax on empty list"
 argmax f (x:xs) = fst $ foldr step (x, f x) xs
   where step a' (a, b) = if f a' > b then (a', f a') else (a, b)
 
@@ -67,8 +68,8 @@ mdirections = map (.* (-1)) pdirections
 directions :: [Direction]
 directions = pdirections ++ mdirections
 
+ndirections :: Int
 ndirections = length directions
-npdirections = length pdirections
 
 closestNeighbor :: [Index] -> Int -> Index -> Direction -> Maybe Index
 closestNeighbor islands m i0 di = find isIsland [i0 .+ (di.*f) | f <- [1..m]]
@@ -111,7 +112,7 @@ readProblem s = do
 compileProblem :: [(Index, Int)] -> Problem
 compileProblem rawIslands = map compileIsland rawIslands
   where islandIndices = map fst rawIslands
-        bbox@(bbl,bbr,bbc) = maxIndex islandIndices .+ (1,1,1)
+        (bbl,bbr,bbc) = maxIndex islandIndices .+ (1,1,1)
         diameter = maximum [bbl, bbr, bbc]
         bridgeBitsStart = bbl*bbr*bbc
         bridgeBitsOffset i = bridgeBitsStart + 3 * ndirections * fromJust (elemIndex i islandIndices)
@@ -128,7 +129,7 @@ compileProblem rawIslands = map compileIsland rawIslands
                 bc2bl = concat . zipWith g neighbors
                 g Nothing _ = []
                 g (Just _) 0 = []
-                g (Just i) n = [(i, n)]
+                g (Just j) n = [(j, n)]
                 bc2bv bc = shift (bridges2bits bc) (bridgeBitsOffset i)    -- our bridges
                        .|. bitOr (zipWith3 other bc neighbors [3,4,5,0,1,2]) -- block non-matching neighbors
                        .|. bitOr (zipWith3 drawBridge bc neighbors pdirections)
@@ -166,11 +167,12 @@ heuristicSort cs = bestStart : heuristicSort' (iFootprint bestStart) rest
         bestPair = argmax overlap allPairs
         bestStart = argmax (popCount . iFootprint) [fst bestPair, snd bestPair]
         rest = delete bestStart cs
-        heuristicSort' :: Bitvector -> Problem -> Problem
-        heuristicSort' bv [] = []
-        heuristicSort' bv cs = best : heuristicSort' bv' (delete best cs)
-          where best = argmax (\c -> popCount (bv .&. iFootprint c)) cs
-                bv' = bv .|. iFootprint best
+
+heuristicSort' :: Bitvector -> Problem -> Problem
+heuristicSort' _ [] = []
+heuristicSort' bv cs = best : heuristicSort' bv' (delete best cs)
+  where best = argmax (\c -> popCount (bv .&. iFootprint c)) cs
+        bv' = bv .|. iFootprint best
         
 -- narrow -------------------------------------------
 
@@ -185,7 +187,8 @@ narrow and2 cis = narrow' cis and1s and2
 
 narrow' :: Problem -> [Bitvector] -> Bitvector -> Problem
 narrow' [] _ _ = []
-narrow' (ci:cis) (and1:and1s) and2 = ci {iBridgeVectors = bvLegal} : narrow' cis and1s (and2 .|. bvAnd)
+narrow' (_:_) [] _ = error "internal error in narrow': This can't happen."
+narrow' (ci:cis) (_:and1s) and2 = ci {iBridgeVectors = bvLegal} : narrow' cis and1s (and2 .|. bvAnd)
     where constraint = bitOr and1s .|. and2
           bvLegal = filter (\(_,b,_) -> b .&. constraint == 0) $ iBridgeVectors ci
           bvAnd = bitAnd $ map sndOf3 bvLegal
@@ -194,7 +197,8 @@ narrow' (ci:cis) (and1:and1s) and2 = ci {iBridgeVectors = bvLegal} : narrow' cis
 
 ccUpdate :: [Bitvector] -> Bitvector -> [Bitvector]
 ccUpdate cc c = foldr f [c] cc
-  where f y (x:xs) = if x .&. y /= 0
+  where f _ [] = error "ccUpdate: this can't happen."
+        f y (x:xs) = if x .&. y /= 0
                      then (x .|. y):xs
                      else x:y:xs
 
@@ -233,11 +237,11 @@ integrate state ci = concatMap f $ iBridgeVectors ci
 -- debugging helper ---------------------
 
 showBitvector :: Index -> Bitvector -> String
-showBitvector (bbl, bbr, bbc) b = field ++ showIslands 0 (shiftR b (bbl*bbr*bbc))
+showBitvector (bbl, bbr, bbc) bv = field ++ showIslands 0 (shiftR bv (bbl*bbr*bbc))
   where field = concatMap field' [0..bbl-1]
         field' l = concatMap (field'' l) [0..bbr-1] ++ "\n"
         field'' l r = concatMap (field''' l r) [0..bbc-1] ++ "\n"
-        field''' l r c = if testBit b ((l*bbr+r)*bbc + c) then "+" else "."
+        field''' l r c = if testBit bv ((l*bbr+r)*bbc + c) then "+" else "."
         showIslands :: Int -> Bitvector -> String
         showIslands _ 0 = ""
         showIslands n b = concatMap (showIslands' b) [0..5] 
